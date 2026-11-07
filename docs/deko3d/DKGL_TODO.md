@@ -92,8 +92,8 @@ All via dkgl (GL renderer unchanged; dkgl gets the missing program / GL hook / s
 
 | # | Item | How (dkgl) | Status |
 |---|---|---|---|
-| A | Hardware checks pending: scatter-gun red cone (warp T128, NRO `5ddf911a`, on SD) + distort haze, tex_anim T125 (Haven ads/gems), shadow2, tie/shrub proto-vis (perf step 1), jak2 slow-mo GAME.CGO | one SD trip | 🟡 |
-| B | Warp bucket 317 — scattergun red cone `skel-gun-red-cone` (2026-11-07 HW: `distort 0` while shooting, no cone) | T128 done: GL `Warp` registered in `init_jak2_foreground`; dkgl seam fix: pool-held dk ids rebind to their dkgl texture (`bind_texture`), so the frame copy survives the copier's resize and gets its T106 barrier | 🟡 HW |
+| A | Hardware checks pending: distort haze (T127), tex_anim T125 (Haven ads/gems), shadow2, tie/shrub proto-vis (perf step 1), jak2 slow-mo GAME.CGO | one SD trip | 🟡 |
+| B | Warp bucket 317 — scattergun red cone `skel-gun-red-cone` (2026-11-07 HW: `distort 0` while shooting, no cone) | T128 done: GL `Warp` registered in `init_jak2_foreground`; dkgl seam fix: pool-held dk ids rebind to their dkgl texture (`bind_texture`), so the frame copy survives the copier's resize and gets its T106 barrier | ✅ HW 2026-11-07 (user) |
 | C | Title-screen "yellow": sky-tng blit-displays capture (tbp #x4c0/#x3300) has no framebuffer copy, only the sepia tint shows | GL `BlitDisplays` frame copy through dkgl (same blit) | ⏳ |
 | D | tfrag WATER buckets (`tfrag-w-l*-water`) not drawn | GL `TFragment` for those buckets through dkgl (`tfrag3` program in the dkgl table); native tfrag keeps NORMAL/TRANS | ⏳ |
 | E | tie TRANS / TRANS_ENVMAP / WATER / WATER_ENVMAP categories not drawn (`TieDk` does NORMAL + envmap only) | GL `Tie3` for those categories through dkgl (`tfrag3`/`etie` programs) | ⏳ |
