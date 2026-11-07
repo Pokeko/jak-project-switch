@@ -75,7 +75,8 @@ dkgl is missing (shader program via `scripts/ai/dkgl_gen_shaders.py`, GL hooks i
 `dkgl_glad.cpp`, state in `dkgl_state.*`). Never write a new native deko3d renderer and never
 hand-port a GL renderer. The native renderers that already work (tfrag, tie, shrub, merc,
 sprite, sky, direct, eye) stay as they are; only fix their bugs. The open list is
-`docs/deko3d/DKGL_TODO.md`.
+`docs/deko3d/DKGL_TODO.md`. Re-confirmed 2026-11-07 for jak2/jak3 too (saves tokens): the
+2026-10-31 "reuse native if quicker" relaxation is withdrawn; jak2 gaps list = DKGL_TODO §7.0.
 **Human hardware tests** are T08-type tasks; ⛔ tasks wait for a user decision.
 
 **Creating the next tasks:** when fewer than 3 tasks are ⏳ (or the user asks

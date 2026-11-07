@@ -57,7 +57,7 @@ Rule: everything below is done through the **dkgl wrapper** (see `AI_ROLES.md`,
 
 | # | Item | Status |
 |---|---|---|
-| 14 | jak2: reuse the native deko3d renderers where they already work, run the remaining GL bucket renderers through dkgl, add the missing dkgl programs (`shadow2`, `tex_anim`, ...) and TextureAnimator support — full list in §7. **tex_anim + TextureAnimator landed 2026-11-06 (T125, AI-assisted): the UNCHANGED GL animator runs through dkgl** (details in §7 item 3). **Glow landed 2026-11-06 (T126, AI-assisted):** the native T124 glow port (wrong strip order, no occlusion = flares through walls) was removed; the UNCHANGED GL `GlowRenderer` (new_mode: depth copy, probe grid, downsample, additive draw) runs through dkgl from the SpriteDk jak2 glow section into a `kGlowList` side list, called right after sprite bucket 313. dkgl gained depth textures (alias of the frame depth image, no copy), Z24S8 renderbuffers, depth attachments, vertex-stage sampling; side lists no longer replay twice from the world loop. A/B: `gk_dkgl_noglow.txt` | 🟡 (HW test pending, NRO md5 438aacef) |
+| 14 | jak2: reuse the native deko3d renderers where they already work, run the remaining GL bucket renderers through dkgl, add the missing dkgl programs (`shadow2`, `tex_anim`, ...) and TextureAnimator support — full list in §7. **tex_anim + TextureAnimator landed 2026-11-06 (T125, AI-assisted): the UNCHANGED GL animator runs through dkgl** (details in §7 item 3). **Glow landed 2026-11-06 (T126, AI-assisted):** the native T124 glow port (wrong strip order, no occlusion = flares through walls) was removed; the UNCHANGED GL `GlowRenderer` (new_mode: depth copy, probe grid, downsample, additive draw) runs through dkgl from the SpriteDk jak2 glow section into a `kGlowList` side list, called right after sprite bucket 313. dkgl gained depth textures (alias of the frame depth image, no copy), Z24S8 renderbuffers, depth attachments, vertex-stage sampling; side lists no longer replay twice from the world loop. A/B: `gk_dkgl_noglow.txt` (glow ✅ HW: skull gems + dark eco fixed). **Distort T127** (scatter gun) through dkgl, y-scale fix HW pending. What is left: §7.0 | 🟡 |
 | 15 | jak3: same as jak2, plus PCRTC brightness | ⏳ |
 
 **jak3 slow motion below 60 fps — ✅ DONE, HW verified 2026-11-04 (GAME.CGO `efb5481f`, stable 30 fps).** Original note: `pc-maybe-vsync` in
@@ -80,11 +80,28 @@ The deko3d migration is done when all of these are true:
 
 ## 7. Jak 2 bring-up — missing list (2026-10-31, AI-assisted)
 
-Rule update (user, 2026-10-31): the 2026-10-27 "all new work via dkgl" rule is relaxed for jak2 —
-**if reusing an existing native deko3d renderer is quicker, reuse it.** dkgl is for the GL bucket
-renderers that have no native equivalent. Sources: `OpenGLRenderer::init_bucket_renderers_jak2()`
+Rule (user, 2026-11-07 — replaces the 2026-10-31 "reuse native if quicker" relaxation):
+**never write new native deko3d code.** Every gap runs the UNCHANGED GL renderer through dkgl.
+The native renderers that already work stay as they are; only fix their bugs. Sources: `OpenGLRenderer::init_bucket_renderers_jak2()`
 (the full jak2 bucket list), the dkgl program table (`dkgl_uniform_table.inc`, 14 programs),
 `dk_renderer.cpp` (jak1 bucket wiring) and the native renderer sources.
+
+### 7.0 What is left for jak2 (summary, 2026-11-07, AI-assisted)
+
+All via dkgl (GL renderer unchanged; dkgl gets the missing program / GL hook / state).
+
+| # | Item | How (dkgl) | Status |
+|---|---|---|---|
+| A | Hardware checks pending: scatter-gun distort y-scale fix (NRO `dc0a083b`, on SD), tex_anim T125 (Haven ads/gems), shadow2, tie/shrub proto-vis (perf step 1), jak2 slow-mo GAME.CGO | one SD trip | 🟡 |
+| B | Warp bucket 317 (heat/portal warp effects) — still inert | GL `Warp` + its `FramebufferCopier` through dkgl; the colour blit already exists (T112/T127) | ⏳ |
+| C | Title-screen "yellow": sky-tng blit-displays capture (tbp #x4c0/#x3300) has no framebuffer copy, only the sepia tint shows | GL `BlitDisplays` frame copy through dkgl (same blit) | ⏳ |
+| D | tfrag WATER buckets (`tfrag-w-l*-water`) not drawn | GL `TFragment` for those buckets through dkgl (`tfrag3` program in the dkgl table); native tfrag keeps NORMAL/TRANS | ⏳ |
+| E | tie TRANS / TRANS_ENVMAP / WATER / WATER_ENVMAP categories not drawn (`TieDk` does NORMAL + envmap only) | GL `Tie3` for those categories through dkgl (`tfrag3`/`etie` programs) | ⏳ |
+| F | Shrub anim slots (animated shrub textures) | bug fix in the existing `ShrubDk` texture lookup: read the slot from the dkgl `TextureAnimator` (T125) | ⏳ |
+| G | dkgl stubs: `glGenerateMipmap` (tex_anim mips empty), `glClearBufferfv` | implement in dkgl | ⏳ |
+| H | Census sweep: close every `dk_gl_census` unimplemented-call hit in a long jak2 run | dkgl | ⏳ |
+| I | Perf to locked 60 at 720p (tie 3-5 ms, shrub 2-4 ms) | measure with `gk_gpuprof.txt` after A | ⏳ |
+| J | Make deko3d the jak2 default (`gfx.cpp` still needs `gk_dk3d.txt`) | one-line switch after B–H | ⏳ |
 
 ### 7.1 Reusable as-is (native or dkgl, already validated on jak1 — jak2 shares the code)
 
