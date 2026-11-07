@@ -1163,6 +1163,22 @@ void blit_frame_to(const DkImageView* dst, const DkImageRect* src_rect, const Dk
   dkCmdBufBarrier(s_cmd, DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
+// DKGL_TODO §7.0 C (AI-assisted): the swapchain image presented last frame (-1 = none yet).
+int s_prevImg = -1;
+
+void blit_prev_frame_to(const DkImageView* dst, const DkImageRect* src_rect,
+                        const DkImageRect* dst_rect, uint32_t flags) {
+  if (s_prevImg < 0) {
+    blit_frame_to(dst, src_rect, dst_rect, flags);
+    return;
+  }
+  DkImageView prev;
+  dkImageViewDefaults(&prev, &s_fb[s_prevImg]);
+  dkCmdBufBarrier(s_cmd, DkBarrier_Full, 0);
+  dkCmdBufBlitImage(s_cmd, &prev, src_rect, dst, dst_rect, flags, 0);
+  dkCmdBufBarrier(s_cmd, DkBarrier_Full, DkInvalidateFlags_Image);
+}
+
 void gpu_mark(int i) {
   if (s_tsMem && s_cmd && i >= 0 && i < kGpuMarks) {
     dkCmdBufReportCounter(s_cmd, DkCounter_Timestamp,
@@ -1411,6 +1427,7 @@ FrameTiming present_frame(bool show_splash) {
   t = armGetSystemTick();
   dkQueueSubmitCommands(s_queue, list);
   dkQueuePresentImage(s_queue, s_swap, img);
+  s_prevImg = img;
   ft.submit_ms = ms_since(t);
   s_frame++;
   return ft;

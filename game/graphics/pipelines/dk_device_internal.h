@@ -115,6 +115,11 @@ void rebind_frame_target();
 // cache invalidated before the copy is sampled). `flags` = DkBlitFlag_FilterNearest or DkBlitFlag_FilterLinear.
 void blit_frame_to(const DkImageView* dst, const DkImageRect* src_rect, const DkImageRect* dst_rect,
                    uint32_t flags);
+// DKGL_TODO §7.0 C (AI-assisted): same, but reads the image presented LAST frame. GL's
+// render_fb keeps last frame until jak2 BlitDisplays (bucket 3) copies + clears it; the dk
+// frame image is already cleared then. Falls back to blit_frame_to before the first present.
+void blit_prev_frame_to(const DkImageView* dst, const DkImageRect* src_rect,
+                        const DkImageRect* dst_rect, uint32_t flags);
 
 // T34b: sampler descriptor set written at init by T34a.
 // GPU addr = data-pool base + sampler_set_off(); samplerId for

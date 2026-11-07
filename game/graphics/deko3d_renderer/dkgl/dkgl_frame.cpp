@@ -32,6 +32,7 @@
 #include "game/graphics/deko3d_renderer/dk_texture_gpu.h"
 #include "game/graphics/deko3d_renderer/dkgl/dkgl_gl_enums.h"
 #include "game/graphics/deko3d_renderer/dkgl/dkgl_state.h"
+#include "game/graphics/opengl_renderer/BlitDisplays.h"  // §7.0 C: jak2 bucket 3
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
 #include "game/graphics/opengl_renderer/buckets.h"  // jak2::BucketId (§7.2 phase 1)
 #include "game/graphics/opengl_renderer/DepthCue.h"
@@ -196,6 +197,7 @@ struct Segment {
   u32 blit_dst_tex = 0;
   DkImageRect blit_src{}, blit_dst{};
   bool blit_linear = false;
+  bool blit_prev = false;  // §7.0 C: copy from last frame's image (jak2 BlitDisplays, bucket 3)
 };
 struct BucketLists {
   std::vector<Segment> segs;
@@ -240,6 +242,7 @@ constexpr int kJak1Buckets[] = {4,  10, 11, 17, 18, 24, 30, 45, 46, 47, 48, 49, 
 // and the tfrag/tie/shrub
 // buckets the native passes take over in later phases. Ascending = GL dispatch order.
 constexpr int kJak2Buckets[] = {
+    (int)jak2::BucketId::BUCKET_3,  // §7.0 C: GL BlitDisplays (menu backdrop copy)
     (int)jak2::BucketId::SKY_DRAW,       (int)jak2::BucketId::OCEAN_MID_FAR,
     (int)jak2::BucketId::MERC_L0_TFRAG,  (int)jak2::BucketId::GMERC_L0_TFRAG,
     (int)jak2::BucketId::MERC_L1_TFRAG,  (int)jak2::BucketId::GMERC_L1_TFRAG,
@@ -655,6 +658,8 @@ class SwitchEmitter final : public Emitter {
     seg.blit_src = src;
     seg.blit_dst = dst;
     seg.blit_linear = linear;
+    seg.blit_prev = s_bucket_ids == s_jak2_ids &&
+                    s_bucket_ids[s_cur_bucket] == (int)jak2::BucketId::BUCKET_3;
     s_lists[s_cur_bucket].segs.push_back(seg);
     open_segment(frame);
   }
@@ -798,6 +803,7 @@ std::unique_ptr<DirectRenderer> s_debug2;         // menus + HUD text
 std::unique_ptr<DirectRenderer> s_debug_no_zbuf2;
 std::unique_ptr<DirectRenderer> s_debug3;
 std::unique_ptr<Warp> s_warp;  // T128: jak2 gmerc-warp 317
+std::unique_ptr<BlitDisplays> s_blit;  // §7.0 C: jak2 bucket 3 (menu backdrop = last frame)
 
 // #19 (AI-assisted): jak1 eye.gc puts each level's NPC eyes in that level's pris-tex bucket
 // (48 / 51), right after the page holding their iris/pupil/lid; only common characters (Jak,
@@ -1258,6 +1264,18 @@ bool init_jak2_foreground(TexturePool* pool, int loaded) {
       s_warp->init_shaders(s_srs->shaders);
       s_warp->init_textures(*pool, GameVersion::Jak2);
       s_renderers[i] = s_warp.get();
+    }
+  }
+  {
+    // §7.0 C: GL init_bucket_renderers_jak2 ("blit", BUCKET_3). PC_PORT 0x10 copies the frame
+    // to PC-BLIT (tbp 0x3300), which sky-tng draws behind the menu tint. Its copy reads last
+    // frame (blit_prev). do_copy_back (0x11 / zoom blur / slow-time) is not called yet.
+    const int i = list_index((int)jak2::BucketId::BUCKET_3);
+    if (i >= 0) {
+      s_blit = std::make_unique<BlitDisplays>("blit", (int)jak2::BucketId::BUCKET_3);
+      s_blit->init_shaders(s_srs->shaders);
+      s_blit->init_textures(*pool, GameVersion::Jak2);
+      s_renderers[i] = s_blit.get();
     }
   }
   s_blackout = std::make_unique<FullScreenDraw>();  // static quad -> persistent storage
@@ -2259,8 +2277,12 @@ bool record_bucket(int bucket) {
       if (img) {
         DkImageView dst;
         dkImageViewDefaults(&dst, img);
-        dkdev::blit_frame_to(&dst, &seg.blit_src, &seg.blit_dst,
-                             seg.blit_linear ? DkBlitFlag_FilterLinear : DkBlitFlag_FilterNearest);
+        const u32 flags = seg.blit_linear ? DkBlitFlag_FilterLinear : DkBlitFlag_FilterNearest;
+        if (seg.blit_prev) {
+          dkdev::blit_prev_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+        } else {
+          dkdev::blit_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+        }
       }
       continue;
     }
