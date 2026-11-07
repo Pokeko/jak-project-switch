@@ -69,6 +69,8 @@ def preprocess(src):
 JAK2_REWRITES = [
     (re.compile(r"\(512\.0\s*/\s*448\.0\)\s*\*\s*1\.0"), "(512.0 / 416.0) * 0.5"),
     (re.compile(r"\*\s*32\.\s*\*\s*1\.0"), "* 32. * 0.5"),
+    # sprite_distort.vert: bare `transformed.y *= HEIGHT_SCALE;` (no SCISSOR_ADJUST)
+    (re.compile(r"(transformed\.y\s*\*=\s*)1\.0\s*;"), "transformed.y *= 0.5;"),
     (re.compile(r"448\.0"), "416.0"),
 ]
 
