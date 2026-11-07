@@ -23,6 +23,7 @@
 
 #include "common/custom_data/Tfrag3Data.h"
 #include "common/dma/dma_chain_read.h"
+#include "common/dma/gs.h"  // T127: GifTag/GsZbuf/GsTex0/GsTex1/GsAlpha (distorter setup)
 #include "common/texture/texture_slots.h"
 #include "common/util/FileUtil.h"
 #include "common/versions/versions.h"  // game_version_names (per-game flag paths)
@@ -46,6 +47,7 @@
 #include "game/graphics/opengl_renderer/foreground/Merc2BucketRenderer.h"
 #include "game/graphics/opengl_renderer/TextureAnimator.h"  // T125: jak2 skull gems via dkgl
 #include "game/graphics/opengl_renderer/sprite/GlowRenderer.h"  // T126: jak2 glows via dkgl
+#include "game/graphics/opengl_renderer/dma_helpers.h"  // T127: distort unpack_to_* helpers
 #include "game/graphics/opengl_renderer/loader/GpuBufferPool.h"
 #include "game/graphics/opengl_renderer/opengl_utils.h"
 #include "game/graphics/opengl_renderer/ocean/OceanMidAndFar.h"
@@ -99,6 +101,8 @@ extern float g_shadow2_darken_scale;  // Shadow2.cpp (gk_dkgl_darkshadow.txt)
 #include "dksh/dkgl_glow_probe_downsample_vert_dksh.h"
 #include "dksh/dkgl_glow_probe_on_grid_frag_dksh.h"
 #include "dksh/dkgl_glow_probe_on_grid_vert_dksh.h"
+#include "dksh/dkgl_sprite_distort_frag_dksh.h"  // T127: Sprite3 distorter (heat haze)
+#include "dksh/dkgl_sprite_distort_vert_dksh.h"
 // jak2 screen constants (HEIGHT_SCALE 0.5, SCISSOR_HEIGHT 416), see game/CMakeLists.txt
 #include "dksh/dkgl_direct_basic_textured_vert_jak2_dksh.h"
 #include "dksh/dkgl_direct_basic_vert_jak2_dksh.h"
@@ -110,6 +114,8 @@ extern float g_shadow2_darken_scale;  // Shadow2.cpp (gk_dkgl_darkshadow.txt)
 #include "dksh/dkgl_ocean_common_vert_jak2_dksh.h"
 #include "dksh/dkgl_shadow_vert_jak2_dksh.h"
 #include "dksh/dkgl_shadow2_vert_jak2_dksh.h"  // §7.2 phase 2
+#include "dksh/dkgl_sprite_distort_frag_jak2_dksh.h"  // T127: frag SCISSOR_HEIGHT 416
+#include "dksh/dkgl_sprite_distort_vert_jak2_dksh.h"
 
 #include "game/switch/run_log.h"
 
@@ -213,6 +219,9 @@ constexpr int kTexAnimList = 1001;
 // T126 (AI-assisted): the GlowRenderer flush (probe FBOs + final additive draws) records into
 // its own list too; record_glow() calls it right after the native sprite bucket.
 constexpr int kGlowList = 1002;
+// T127 (AI-assisted): the Sprite3 distorter (scattergun heat haze) draws into its own list;
+// record_distort() calls it right BEFORE the native sprite bucket (GL render_jak2 order).
+constexpr int kDistortList = 1003;
 constexpr int kJak1Buckets[] = {4,  10, 11, 17, 18, 24, 30, 45, 46, 47, 48, 49, 50, 51,
                                 52, 53, 54, 55, 56, 58, 59, 61, 62, 63, 64, kBlackoutList};
 // 48 / 51 (pris-tex) only run the level NPC eyes found there (PrisTexEyes, #19).
@@ -278,7 +287,8 @@ constexpr int kJak2Buckets[] = {
     (int)jak2::BucketId::DEBUG3,
     kBlackoutList,
     kTexAnimList,   // T125: stays above every real bucket id, like the blackout
-    kGlowList};     // T126
+    kGlowList,      // T126
+    kDistortList};  // T127
 constexpr int kJak1Count = sizeof(kJak1Buckets) / sizeof(kJak1Buckets[0]);
 constexpr int kJak2Count = sizeof(kJak2Buckets) / sizeof(kJak2Buckets[0]);
 // jak2 eye.gc: vu1-bucket-map with (merc-mode eye) puts a character's eye DMA in its level's
@@ -438,6 +448,9 @@ ProgramShaders s_programs[] = {
      dkgl_glow_probe_downsample_frag_dksh_size, {}, {}, false},
     {"glow_draw", dkgl_glow_draw_vert_dksh, dkgl_glow_draw_vert_dksh_size,
      dkgl_glow_draw_frag_dksh, dkgl_glow_draw_frag_dksh_size, {}, {}, false},
+    // T127: Sprite3 distorter (GL render_distorter, jak2 scattergun heat haze)
+    {"sprite_distort", dkgl_sprite_distort_vert_dksh, dkgl_sprite_distort_vert_dksh_size,
+     dkgl_sprite_distort_frag_dksh, dkgl_sprite_distort_frag_dksh_size, {}, {}, false},
 };
 
 // Vertex shaders whose y-scale differs per game: the jak2 build replaces the jak1 blob.
@@ -461,6 +474,14 @@ const Jak2Vert kJak2Verts[] = {
     {"glow_depth_copy", dkgl_glow_depth_copy_vert_jak2_dksh,
      dkgl_glow_depth_copy_vert_jak2_dksh_size},  // T126: SCISSOR_HEIGHT 416
     {"glow_draw", dkgl_glow_draw_vert_jak2_dksh, dkgl_glow_draw_vert_jak2_dksh_size},
+    {"sprite_distort", dkgl_sprite_distort_vert_jak2_dksh,
+     dkgl_sprite_distort_vert_jak2_dksh_size},  // T127
+};
+
+// T127: sprite_distort.frag also differs per game (SCISSOR_HEIGHT), so the frag blob is
+// swapped the same way as the verts above.
+const Jak2Vert kJak2Frags[] = {
+    {"sprite_distort", dkgl_sprite_distort_frag_jak2_dksh, dkgl_sprite_distort_frag_jak2_dksh_size},
 };
 
 void use_jak2_verts() {
@@ -469,6 +490,14 @@ void use_jak2_verts() {
       if (strcmp(p.name, j.name) == 0) {
         p.vert = j.vert;
         p.vert_size = j.vert_size;
+      }
+    }
+  }
+  for (const auto& j : kJak2Frags) {
+    for (auto& p : s_programs) {
+      if (strcmp(p.name, j.name) == 0) {
+        p.frag = j.vert;
+        p.frag_size = j.vert_size;
       }
     }
   }
@@ -881,6 +910,98 @@ bool s_glow_frame = false;       // glow_begin opened the list in this capture
 u32 s_frame_depth_alias = 0;     // dktexgpu id aliasing dkdev::frame_depth_image()
 u64 s_glow_sprites = 0, s_glow_bad = 0;  // log only
 bool s_side_list_call = false;   // record_bucket called from record_tex_anim / record_glow
+
+// ---- T127 (AI-assisted): Sprite3 distorter (jak2 scattergun heat haze) ----------------
+// GL Sprite3::render_distorter's NON-INSTANCED path (distort_dma + distort_setup +
+// distort_draw), with its ASSERTs turned into soft checks like glow_dma above. The walk
+// fills the frame data from the bucket 313 distort section; the draw snapshots the frame
+// into an FBO texture (blit_framebuffer, the DepthCue T112 path) and draws the refraction
+// strips over it through the sprite_distort program. Runs at capture time from the SpriteDk
+// walk; the segment plays from record_distort() right BEFORE the native sprite bucket --
+// GL render_jak2 draws the distorter first, sprites on top, glow last.
+namespace {
+// layout mirrors the Sprite3.h nested structs (the static_asserts pin the same sizes)
+struct DistortSetup {
+  GifTag gif_tag;
+  GsZbuf zbuf;
+  u64 zbuf_addr;
+  GsTex0 tex0;
+  u64 tex0_addr;
+  GsTex1 tex1;
+  u64 tex1_addr;
+  u64 miptbp;
+  u64 miptbp_addr;
+  u64 clamp;
+  u64 clamp_addr;
+  GsAlpha alpha;
+  u64 alpha_addr;
+};
+static_assert(sizeof(DistortSetup) == (7 * 16));
+
+struct DistortSineTables {
+  math::Vector4f entry[128];
+  math::Vector<u32, 4> ientry[9];
+  GifTag gs_gif_tag;
+  math::Vector<u32, 4> color;
+};
+static_assert(sizeof(DistortSineTables) == (0x8b * 16));
+
+struct DistortFrameData {
+  math::Vector3f xyz;   // position
+  float num_255;        // always 255.0
+  math::Vector2f st;    // texture coords
+  float num_1;          // always 1.0
+  u32 flag;             // 'resolution' of the sprite
+  math::Vector4f rgba;  // ? (doesn't seem to be color)
+};
+static_assert(sizeof(DistortFrameData) == (16 * 3));
+
+struct DistortVertex {
+  math::Vector3f xyz;
+  math::Vector2f st;
+};
+
+constexpr int kMaxDistortSprites = 256 * 12;  // SPRITE_RENDERER_MAX_DISTORT_SPRITES
+
+DistortSetup s_distort_setup;
+DistortSineTables s_distort_tables;
+std::vector<DistortFrameData> s_distort_frame_data;
+std::vector<DistortVertex> s_distort_verts;
+std::vector<u32> s_distort_idx;
+int s_distort_sprites = 0;
+bool s_distort_frame = false;  // distort_begin opened the list in this capture
+bool s_distort_armed = false;  // segment open: distort_dma may draw
+bool s_distort_on = true;      // A/B flag gk_dkgl_nodistort.txt
+u64 s_distort_draws = 0, s_distort_bad = 0;
+// GL objects (created on first use)
+u32 s_distort_fbo = 0, s_distort_tex = 0, s_distort_vao = 0, s_distort_vbo = 0, s_distort_ibo = 0;
+int s_distort_fbo_w = 0, s_distort_fbo_h = 0;
+
+bool looks_like_distort_frame_data(const DmaFollower& dma) {
+  return dma.current_tag().kind == DmaTag::Kind::CNT &&
+         dma.current_tag_vifcode0().kind == VifCode::Kind::NOP &&
+         dma.current_tag_vifcode1().kind == VifCode::Kind::UNPACK_V4_32;
+}
+
+// one-time GL objects: VAO (loc 0 vec3 + loc 1 vec2, interleaved), FBO + its color texture
+void distort_make_objects() {
+  gen_vertex_arrays(1, &s_distort_vao);
+  gen_buffers(1, &s_distort_vbo);
+  gen_buffers(1, &s_distort_ibo);
+  gen_framebuffers(1, &s_distort_fbo);
+  gen_textures(1, &s_distort_tex);
+  bind_framebuffer(s_distort_fbo);
+  framebuffer_texture_2d(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, s_distort_tex, 0);
+  bind_framebuffer(0);
+  bind_vertex_array(s_distort_vao);
+  bind_buffer(gl::ARRAY_BUFFER, s_distort_vbo);
+  enable_vertex_attrib_array(0);
+  vertex_attrib_pointer(0, 3, gl::FLOAT, false, sizeof(DistortVertex), (void*)0);
+  enable_vertex_attrib_array(1);
+  vertex_attrib_pointer(1, 2, gl::FLOAT, false, sizeof(DistortVertex), (void*)12);
+}
+}  // namespace
+
 std::atomic<float> s_pmode_alp{1.f};         // GOAL set_pmode_alp, written on the EE thread
 BucketRenderer* s_renderers[kMaxBuckets] = {};
 u64 s_dma_mismatch = 0;
@@ -1522,6 +1643,13 @@ bool capture_begin(const void* chain_data, u32 chain_offset) {
     s_lists[glow_idx].segs.clear();
     s_lists[glow_idx].valid = false;
   }
+  s_distort_frame = false;  // T127: same per-capture rule for the distort list
+  s_distort_armed = false;
+  const int distort_idx = list_index(kDistortList);
+  if (distort_idx >= 0) {
+    s_lists[distort_idx].segs.clear();
+    s_lists[distort_idx].valid = false;
+  }
   return true;
 }
 
@@ -1712,6 +1840,235 @@ bool record_glow() {
   return record_side_list(kGlowList);
 }
 
+
+// GL Sprite3::distort_setup: expands each frame-data sprite into pie-slice triangle strips
+// using the sine tables. The shared center vertex is referenced by index; every sprite ends
+// with a UINT32_MAX restart index. Returns false on an out-of-range shape (soft fail).
+bool distort_build_vertices() {
+  s_distort_verts.clear();
+  s_distort_idx.clear();
+  int sprite_idx = 0;
+  int sprites_left = s_distort_sprites;
+  while (sprites_left != 0) {
+    if (sprite_idx >= (int)s_distort_frame_data.size()) {
+      return false;  // more sprites than the walk buffered
+    }
+    const DistortFrameData& fd = s_distort_frame_data.at(sprite_idx);
+    const u32 flag = fd.flag;
+    if (flag < 3 || flag > 11) {
+      return false;
+    }
+    u32 slices_left = flag;
+    // ientry index is offset by 352 (the entry array start in VU memory)
+    int entry_index = (int)s_distort_tables.ientry[flag - 3].x() - 352;
+    if (entry_index < 0 || entry_index + 2 * (int)flag + 2 > 128) {
+      return false;
+    }
+    sprite_idx++;
+    const math::Vector2f vf03 = fd.st;
+    const math::Vector3f vf14 = fd.xyz;
+    const u32 center_vert_idx = s_distort_verts.size();
+    s_distort_verts.push_back({vf14, vf03});
+    do {
+      math::Vector3f vf06 = s_distort_tables.entry[entry_index++].xyz();
+      math::Vector2f vf07 = s_distort_tables.entry[entry_index++].xy();
+      math::Vector3f vf08 = s_distort_tables.entry[entry_index + 0].xyz();
+      math::Vector2f vf09 = s_distort_tables.entry[entry_index + 1].xy();
+      slices_left--;
+      math::Vector2f vf11 = (vf07 * fd.rgba.z()) + fd.st;
+      math::Vector2f vf13 = (vf09 * fd.rgba.z()) + fd.st;
+      math::Vector3f vf06_2 = (vf06 * fd.rgba.x()) + fd.xyz;
+      math::Vector2f vf07_2 = (vf07 * fd.rgba.x()) + fd.st;
+      math::Vector3f vf08_2 = (vf08 * fd.rgba.x()) + fd.xyz;
+      math::Vector2f vf09_2 = (vf09 * fd.rgba.x()) + fd.st;
+      math::Vector3f vf10 = (vf06 * fd.rgba.y()) + fd.xyz;
+      math::Vector3f vf12 = (vf08 * fd.rgba.y()) + fd.xyz;
+      s_distort_idx.push_back(s_distort_verts.size());
+      s_distort_verts.push_back({vf06_2, vf07_2});
+      s_distort_idx.push_back(s_distort_verts.size());
+      s_distort_verts.push_back({vf08_2, vf09_2});
+      s_distort_idx.push_back(s_distort_verts.size());
+      s_distort_verts.push_back({vf10, vf11});
+      s_distort_idx.push_back(s_distort_verts.size());
+      s_distort_verts.push_back({vf12, vf13});
+      s_distort_idx.push_back(center_vert_idx);
+    } while (slices_left != 0);
+    s_distort_idx.push_back(UINT32_MAX);
+    sprites_left--;
+  }
+  return true;
+}
+
+bool distort_begin() {
+  static bool s_flag_checked = false;  // A/B flag gk_dkgl_nodistort.txt (one-time)
+  if (!s_flag_checked) {
+    s_flag_checked = true;
+    s_distort_on = !flag("gk_dkgl_nodistort.txt");
+  }
+  if (!s_active || !s_cap_open || !s_distort_on || s_distort_frame) {
+    return false;
+  }
+  const int idx = list_index(kDistortList);
+  if (idx < 0) {
+    return false;
+  }
+  if (s_distort_frame_data.empty()) {
+    s_distort_frame_data.resize(kMaxDistortSprites);
+  }
+  if (s_distort_vao == 0) {
+    distort_make_objects();
+  }
+  s_lists[idx].segs.clear();
+  s_lists[idx].valid = false;
+  s_distort_frame = true;
+  s_distort_armed = true;
+  s_cur_bucket = idx;
+  begin_bucket();
+  s_emitter.bucket_start();
+  viewport(0, 0, s_fb_w, s_fb_h);
+  if (bound_framebuffer() != 0) {
+    bind_framebuffer(0);
+  }
+  pending_target_consumed();
+  s_color_mask = DkColorMask_RGBA;
+  open_segment(true);
+  return true;
+}
+
+// GL Sprite3::distort_dma + distort_setup + distort_draw, soft checks. Always consumes the
+// whole section, so the SpriteDk walk continues cleanly even when there is no capture (then
+// s_distort_armed is false and this only skips through the DMA).
+void distort_dma(DmaFollower& dma) {
+  // GS setup: NOP + DIRECT(7) -> zbuf/tex0/tex1/miptbp/clamp/alpha
+  auto setup = dma.read_and_advance();
+  if (setup.vifcode0().kind != VifCode::Kind::NOP ||
+      setup.vifcode1().kind != VifCode::Kind::DIRECT || setup.vifcode1().immediate != 7 ||
+      setup.size_bytes < 7 * 16) {
+    s_distort_bad++;
+    return;
+  }
+  memcpy(&s_distort_setup, setup.data, 7 * 16);
+  // GL asserts a/c == SOURCE and b/d == DEST (standard alpha blend); soft here
+  const bool blend_ok = s_distort_setup.alpha.a_mode() == GsAlpha::BlendMode::SOURCE &&
+                        s_distort_setup.alpha.b_mode() == GsAlpha::BlendMode::DEST &&
+                        s_distort_setup.alpha.c_mode() == GsAlpha::BlendMode::SOURCE &&
+                        s_distort_setup.alpha.d_mode() == GsAlpha::BlendMode::DEST;
+  if (!blend_ok) {
+    s_distort_bad++;
+  }
+  // aspect notification (PC only; GL uses it just for the instanced path)
+  auto aspect = dma.read_and_advance();
+  if (aspect.size_bytes != 16 || aspect.vifcode1().kind != VifCode::Kind::PC_PORT) {
+    s_distort_bad++;
+    return;
+  }
+  // sine tables
+  auto tables = dma.read_and_advance();
+  unpack_to_stcycl(&s_distort_tables, tables, VifCode::Kind::UNPACK_V4_32, 4, 4, 0x8b * 16,
+                   0x160, false, false);
+  // frame-data blocks: VU 511 = sprite count, >= 512 = vertex data; MSCALF + FLUSH ends one
+  int sprite_idx = 0;
+  u32 total_sprites = 0;
+  while (looks_like_distort_frame_data(dma)) {
+    math::Vector<u32, 4> num_sprites_vec = {0, 0, 0, 0};
+    do {
+      const int qwc = dma.current_tag().qwc;
+      const int dest = dma.current_tag_vifcode1().immediate;
+      auto t = dma.read_and_advance();
+      if (dest == 511) {
+        unpack_to_no_stcycl(&num_sprites_vec, t, VifCode::Kind::UNPACK_V4_32, 16, dest, false,
+                            false);
+      } else if (dest >= 512 && sprite_idx + (qwc / 3) <= (int)s_distort_frame_data.size()) {
+        unpack_to_no_stcycl(&s_distort_frame_data.at(sprite_idx), t,
+                            VifCode::Kind::UNPACK_V4_32, qwc * 16, dest, false, false);
+        sprite_idx += qwc / 3;
+      } else {
+        s_distort_bad++;
+      }
+    } while (looks_like_distort_frame_data(dma));
+    if (dma.current_tag().kind == DmaTag::Kind::CNT &&
+        dma.current_tag_vifcode0().kind == VifCode::Kind::MSCALF &&
+        dma.current_tag_vifcode1().kind == VifCode::Kind::FLUSH) {
+      dma.read_and_advance();
+    } else {
+      s_distort_bad++;
+      return;
+    }
+    total_sprites += num_sprites_vec.x();
+  }
+  s_distort_sprites = (int)total_sprites;
+  if (!s_distort_armed || s_distort_sprites == 0 || !distort_build_vertices()) {
+    return;
+  }
+
+  // ---- draw (GL distort_draw_common + distort_draw) ----
+  // size the snapshot texture to the frame (GL distort_setup_framebuffer_dims)
+  if (s_distort_fbo_w != s_srs->render_fb_w || s_distort_fbo_h != s_srs->render_fb_h) {
+    s_distort_fbo_w = s_srs->render_fb_w;
+    s_distort_fbo_h = s_srs->render_fb_h;
+    bind_texture(s_distort_tex);
+    if (!tex_image_2d(0, gl::RGB, s_distort_fbo_w, s_distort_fbo_h, gl::RGB, gl::UNSIGNED_BYTE,
+                      nullptr)) {
+      s_distort_bad++;
+      return;
+    }
+  }
+  // snapshot the frame so the strips can refract what is behind them (DepthCue T112 path)
+  bind_framebuffer_target(gl::READ_FRAMEBUFFER, 0);
+  bind_framebuffer(s_distort_fbo);
+  blit_framebuffer(0, 0, s_srs->render_fb_w, s_srs->render_fb_h, 0, 0, s_distort_fbo_w,
+                   s_distort_fbo_h, gl::COLOR_BUFFER_BIT, gl::NEAREST);
+  bind_framebuffer(0);
+  // state from the GS setup: zbuf zmsk (depth write), tex1 mmag (filter), alpha (blend).
+  // Depth stays a TEST (GEQUAL, the GS convention every GL sprite draw uses -- the shader
+  // maps the GS z straight into clip space, so the comparison direction must match).
+  enable(gl::BLEND);
+  blend_func(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+  enable(gl::DEPTH_TEST);
+  depth_func(gl::GEQUAL);
+  depth_mask(!s_distort_setup.zbuf.zmsk());
+  active_texture(gl::TEXTURE0);
+  bind_texture(s_distort_tex);
+  const u32 filt = s_distort_setup.tex1.mmag() ? gl::LINEAR : gl::NEAREST;
+  tex_parameteri(gl::TEXTURE_MIN_FILTER, filt);
+  tex_parameteri(gl::TEXTURE_MAG_FILTER, filt);
+  tex_parameteri(gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
+  tex_parameteri(gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
+  // shader + u_color (the sine tables' color / 255, GL distort_draw)
+  const Shader& shader = s_srs->shaders[ShaderId::SPRITE_DISTORT];
+  shader.activate();
+  const auto& c = s_distort_tables.color;
+  const float colorf[4] = {c.x() / 255.0f, c.y() / 255.0f, c.z() / 255.0f, c.w() / 255.0f};
+  uniform4fv(get_uniform_location((u32)shader.id(), "u_color"), 1, colorf);
+  // vertex + index data, then the strips (split by the restart index, ocean/shadow2 path)
+  bind_vertex_array(s_distort_vao);
+  bind_buffer(gl::ARRAY_BUFFER, s_distort_vbo);
+  buffer_data(gl::ARRAY_BUFFER, s_distort_verts.size() * sizeof(DistortVertex),
+              s_distort_verts.data(), gl::STATIC_DRAW);
+  bind_buffer(gl::ELEMENT_ARRAY_BUFFER, s_distort_ibo);
+  buffer_data(gl::ELEMENT_ARRAY_BUFFER, s_distort_idx.size() * sizeof(u32),
+              s_distort_idx.data(), gl::STATIC_DRAW);
+  enable(gl::PRIMITIVE_RESTART);
+  primitive_restart_index(UINT32_MAX);
+  draw_elements(gl::TRIANGLE_STRIP, (int)s_distort_idx.size(), gl::UNSIGNED_INT, nullptr);
+  s_distort_draws++;
+}
+
+void distort_end() {
+  const int idx = list_index(kDistortList);
+  if (!s_distort_frame || idx < 0 || s_cur_bucket != idx) {
+    return;
+  }
+  restore_bucket_end_state();
+  close_segment();
+  s_lists[idx].valid = true;
+  s_distort_armed = false;
+  s_cur_bucket = -1;
+}
+bool record_distort() {
+  return record_side_list(kDistortList);
+}
+
 void capture_end() {
   if (!s_cap_open) {
     return;
@@ -1734,7 +2091,7 @@ void capture_end() {
         "[dkgl] ocean %llu frames | segs %u+%u | data %u/%u KB ubo %u/%u KB high | fails "
         "data %u ubo %u | draws %llu skipped %llu inert %llu notex %llu | dma mismatch %llu | cmd overflow "
         "%llu | blit bad %llu | eye draws %llu | interleaved %llu | texanim %llu | glow %llu "
-        "bad %llu",
+        "bad %llu | distort %llu bad %llu",
         (unsigned long long)s_captures, (unsigned)s_lists[0].segs.size(),
         (unsigned)s_lists[list_index(g_game_version == GameVersion::Jak2
                                          ? (int)jak2::BucketId::OCEAN_NEAR
@@ -1746,7 +2103,8 @@ void capture_end() {
         (unsigned long long)s_cmd_overflows, (unsigned long long)unsupported_blit_count(),
         (unsigned long long)s_eye_draws, (unsigned long long)s_interleaved_frames,
         (unsigned long long)s_tex_anim_dispatches, (unsigned long long)s_glow_sprites,
-        (unsigned long long)s_glow_bad);
+        (unsigned long long)s_glow_bad, (unsigned long long)s_distort_draws,
+        (unsigned long long)s_distort_bad);
   }
 }
 
@@ -1866,10 +2224,11 @@ bool record_bucket(int bucket) {
   if (!s_active) {
     return false;
   }
-  // T126: the tex-anim / glow side lists are in the table (list_index) but only play at their
-  // own slot (record_tex_anim / record_glow); the world loop's call must skip them, or the
-  // additive glow would draw twice.
-  if ((bucket == kTexAnimList || bucket == kGlowList) && !s_side_list_call) {
+  // T126: the tex-anim / glow / distort side lists are in the table (list_index) but only
+  // play at their own slot (record_tex_anim / record_glow / record_distort); the world loop's
+  // call must skip them, or the additive glow would draw twice.
+  if ((bucket == kTexAnimList || bucket == kGlowList || bucket == kDistortList) &&
+      !s_side_list_call) {
     return false;
   }
   const int idx = list_index(bucket);
@@ -1958,6 +2317,14 @@ bool glow_begin() {
 void glow_dma(DmaFollower&) {}
 void glow_end() {}
 bool record_glow() {
+  return false;
+}
+bool distort_begin() {
+  return false;
+}
+void distort_dma(DmaFollower&) {}
+void distort_end() {}
+bool record_distort() {
   return false;
 }
 bool record_blackout() {

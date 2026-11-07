@@ -238,6 +238,18 @@ void dk_glow(DmaFollower& dma) {
   }
 }
 
+// T127 (AI-assisted): jak2 distort section (at the START of bucket 313, before the sprites)
+// -> the GL Sprite3 distort walk + draw through dkgl (scattergun heat haze). Without a
+// capture distort_dma still consumes the section, so the walk continues cleanly.
+void dk_distort(DmaFollower& dma) {
+  if (dkgl::distort_begin()) {
+    dkgl::distort_dma(dma);
+    dkgl::distort_end();
+  } else {
+    dkgl::distort_dma(dma);  // walk-only (no segment open)
+  }
+}
+
 // T88 (AI-assisted): GL SkyBlendCPU::init_textures for the dk path. The two blended
 // outputs (32x32 sky, 64x64 clouds) are dktexgpu textures registered in the pool at the
 // fixed VRAM slots the sky-draw bucket (3) samples, SKY_TEXTURE_VRAM_ADDRS; the pool's
@@ -625,6 +637,8 @@ void record_jak2_dkgl(int fb_w, int fb_h) {
     flush_natives(dksprite::kJak2SpriteBucket);
     prof_unit(unit, dksprite::kJak2SpriteBucket);
     dkgl::record_tex_anim();  // T125: gem composites exist before bucket 313 samples them
+    dkgl::record_distort();   // T127: GL draws the distorter before the sprites (it samples
+                              // the frame as it is BEFORE the sprite draws)
     dksprite::record_world(fb_w, fb_h);
     dkgl::record_glow();  // T126: GL render_jak2 draws the glow right after the HUD sprites
     sprite_done = true;
@@ -1086,7 +1100,8 @@ void DkDisplay::render() {
                               s_dk_jak2_sprite,  // read_sprites: bucket 313 particles
                               false,             // head_call: jak2 chains have no CALL head
                               dk_texture_anim,  // T125: imm-12 -> GL TextureAnimator (dkgl)
-                              dk_glow);         // T126: glow section -> GL GlowRenderer (dkgl)
+                              dk_glow,          // T126: glow section -> GL GlowRenderer (dkgl)
+                              dk_distort);      // T127: distort section -> GL distorter (dkgl)
       if (s_dkgl_interleave) {
         dkgl::capture_end();
         dkgl::note_interleaved_frame();

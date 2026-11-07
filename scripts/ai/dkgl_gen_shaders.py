@@ -27,7 +27,9 @@ PROGRAMS = ["ocean_common", "ocean_envmap", "ocean_envmap_haze",
             "eye",  # #19: GL EyeRenderer (render-to-texture eyes) through dkgl
             "tex_anim",  # T125: GL TextureAnimator (jak2 skull gems) through dkgl
             # T126: GL GlowRenderer (jak2 light glows) through dkgl
-            "glow_depth_copy", "glow_probe_on_grid", "glow_probe_downsample", "glow_draw"]
+            "glow_depth_copy", "glow_probe_on_grid", "glow_probe_downsample", "glow_draw",
+            # T127: GL Sprite3::render_distorter (jak2 scattergun heat haze) through dkgl
+            "sprite_distort"]
 
 HEIGHT_SCALE = "1.0"        # jak1 (Shader.cpp)
 SCISSOR_HEIGHT = "448.0"    # jak1 (Shader.cpp)
@@ -40,9 +42,11 @@ UNIFORM_RE = re.compile(
     r"^[ \t]*uniform[ \t]+(float|int|uint|bool|unsigned int|vec2|vec3|vec4|ivec2|ivec3|ivec4|mat4)[ \t]+"
     r"([A-Za-z_]\w*)(\[(\d+)\])?[ \t]*;", re.M)
 # tex_T<N> -> binding N; a plain `tex` (depth_cue.frag, T112) -> binding 0, which is the
-# unit DepthCue selects with glUniform1i(tex, 0)
+# unit DepthCue selects with glUniform1i(tex, 0). T127: sprite_distort.frag names its
+# sampler `framebuffer_tex` (GL binds it on unit 0 via setup_opengl_from_draw_mode's
+# GL_TEXTURE0) -> binding 0 too.
 SAMPLER_RE = re.compile(
-    r"^[ \t]*uniform[ \t]+sampler2D[ \t]+(tex_T(\d+)|tex)[ \t]*;", re.M)
+    r"^[ \t]*uniform[ \t]+sampler2D[ \t]+(tex_T(\d+)|tex|framebuffer_tex)[ \t]*;", re.M)
 # conservative std140: every member a 16-byte slot; mat4 four slots
 SLOT = {"float": 16, "int": 16, "uint": 16, "bool": 16, "unsigned int": 16,
         "vec2": 16, "vec3": 16, "vec4": 16, "ivec2": 16, "ivec3": 16, "ivec4": 16,

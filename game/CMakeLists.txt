@@ -522,7 +522,9 @@ if(NINTENDO_SWITCH)
                       dkgl/glow_depth_copy.vert dkgl/glow_depth_copy.frag
                       dkgl/glow_probe_on_grid.vert dkgl/glow_probe_on_grid.frag
                       dkgl/glow_probe_downsample.vert dkgl/glow_probe_downsample.frag
-                      dkgl/glow_draw.vert dkgl/glow_draw.frag)
+                      dkgl/glow_draw.vert dkgl/glow_draw.frag
+                      # T127: Sprite3 distorter (jak2 scattergun heat haze) via dkgl
+                      dkgl/sprite_distort.vert dkgl/sprite_distort.frag)
     set(_DKGL_OUTS "")
     foreach(_sh ${_DKGL_SHADERS})
         string(REPLACE "." "_" _nm ${_sh})
@@ -554,17 +556,21 @@ if(NINTENDO_SWITCH)
                       sprite3.vert  # §7.2 particles: SpriteDk on jak2 bucket 313
                       dkgl/direct_basic.vert dkgl/direct_basic_textured.vert
                       dkgl/emerc.vert dkgl/merc2.vert
-                      dkgl/glow_depth_copy.vert dkgl/glow_draw.vert)  # T126
+                      dkgl/glow_depth_copy.vert dkgl/glow_draw.vert  # T126
+                      # T127: both stages of the distorter differ (vert HEIGHT_SCALE,
+                      # frag SCISSOR_HEIGHT)
+                      dkgl/sprite_distort.vert dkgl/sprite_distort.frag)
     set(_JAK2_OUTS "")
     foreach(_sh ${_JAK2_SHADERS})
         string(REPLACE "." "_" _nm ${_sh})
         string(REPLACE "/" "_" _nm ${_nm})
         set(_nm ${_nm}_jak2)
+        string(REGEX MATCH "[a-z]+$" _stage ${_sh})
         add_custom_command(
             OUTPUT ${_TF3_GEN}/${_nm}.dksh ${_TF3_GEN}/${_nm}_dksh.h
             COMMAND python3 ${_TF3_PY}
                     --input ${CMAKE_CURRENT_SOURCE_DIR}/graphics/deko3d_renderer/shaders/${_sh}.glsl
-                    --stage vert --game jak2 --output ${_TF3_GEN}/${_nm}.dksh
+                    --stage ${_stage} --game jak2 --output ${_TF3_GEN}/${_nm}.dksh
             COMMAND ${CMAKE_COMMAND} -DIN=${_TF3_GEN}/${_nm}.dksh
                     -DOUT=${_TF3_GEN}/${_nm}_dksh.h -DNAME=${_nm}_dksh
                     -P ${_TF3_EMBED}

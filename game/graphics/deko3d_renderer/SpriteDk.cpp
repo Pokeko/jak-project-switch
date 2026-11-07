@@ -46,6 +46,7 @@ LookupFn s_lookup = nullptr;
 float s_near_fade_end = 0.f;  // #17: 0 = off (GL behaviour)
 AnimFn s_anim = nullptr;      // T125: PC_PORT imm-12 -> texture animator
 GlowFn s_glow = nullptr;      // T126: jak2 glow section -> GL GlowRenderer via dkgl
+DistortFn s_distort = nullptr;  // T127: jak2 distort section -> GL distorter via dkgl
 bool s_jak2 = false;          // §7.2 particles: walking GL Sprite3::render_jak2's layout
 
 void init_default_mode() {
@@ -237,21 +238,27 @@ void walk_sprite_bucket(const void* data, uint32_t slot, uint32_t next) {
   }
   s_stats.ran = true;
 
-  // distorter (GL distort_dma): setup, aspect, tables, then frame-data blocks + MSCALF each
-  d.read_and_advance();
-  d.read_and_advance();
-  d.read_and_advance();
-  while (looks_like_distort_frame_data(d)) {
-    do {
-      const int dest = d.current_tag_vifcode1().immediate;
-      auto t = d.read_and_advance();
-      if (dest == 511 && t.size_bytes >= 4) {
-        uint32_t n = 0;
-        memcpy(&n, t.data, 4);
-        s_stats.distort += n;
-      }
-    } while (looks_like_distort_frame_data(d));
-    d.read_and_advance();  // MSCALF + FLUSH
+  // distorter (GL distort_dma): setup, aspect, tables, then frame-data blocks + MSCALF each.
+  // T127: with the distort hook the whole section is handed to the GL distorter through dkgl
+  // (dk_renderer dk_distort); without it the old skip + count path runs (jak1).
+  if (s_distort) {
+    s_distort(d);
+  } else {
+    d.read_and_advance();
+    d.read_and_advance();
+    d.read_and_advance();
+    while (looks_like_distort_frame_data(d)) {
+      do {
+        const int dest = d.current_tag_vifcode1().immediate;
+        auto t = d.read_and_advance();
+        if (dest == 511 && t.size_bytes >= 4) {
+          uint32_t n = 0;
+          memcpy(&n, t.data, 4);
+          s_stats.distort += n;
+        }
+      } while (looks_like_distort_frame_data(d));
+      d.read_and_advance();  // MSCALF + FLUSH
+    }
   }
 
   // handle_sprite_frame_setup: direct setup (48 B), frame data, MSCALF, BASE/OFFSET
@@ -427,7 +434,8 @@ void capture_chain(const void* data,
                    bool read_sprites,
                    bool head_call,
                    AnimFn anim,
-                   GlowFn glow) {
+                   GlowFn glow,
+                   DistortFn distort) {
   s_verts.clear();
   s_idx.clear();
   s_batches.clear();
@@ -438,6 +446,7 @@ void capture_chain(const void* data,
   s_jak2 = !head_call;  // only jak2 chains lack the CALL head (see below)
   s_anim = anim;
   s_glow = glow;
+  s_distort = distort;
   init_default_mode();
   if (data == nullptr) {
     return;

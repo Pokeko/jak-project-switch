@@ -79,6 +79,17 @@ bool glow_begin();
 void glow_dma(DmaFollower& dma);
 void glow_end();
 bool record_glow();
+// T127 (AI-assisted): the Sprite3 distorter (jak2 scattergun shot heat haze) through dkgl:
+// GL Sprite3::render_distorter's walk + draw. distort_dma walks the distort section at the
+// START of the sprite bucket between distort_begin/distort_end (called from the SpriteDk
+// walk); record_distort() calls the recorded list in the world recorder right BEFORE the
+// native sprite bucket (GL render_jak2 draws the distorter before the sprites). Without an
+// open segment (begin returned false) distort_dma still consumes the whole section.
+// A/B flag: gk_dkgl_nodistort.txt.
+bool distort_begin();
+void distort_dma(DmaFollower& dma);
+void distort_end();
+bool record_distort();
 // The frame target size, for the GL default viewport (OpenGLRenderer sets it per frame).
 void set_frame_size(int w, int h);
 

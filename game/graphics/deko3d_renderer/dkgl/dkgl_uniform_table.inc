@@ -191,6 +191,12 @@ inline constexpr UniformSlot kSlots_glow_draw_vert[] = {
 inline constexpr UniformSlot kSlots_glow_draw_frag[] = {
     {"glow_boost", 0, 16},
 };
+inline constexpr UniformSlot kSlots_sprite_distort_vert[] = {
+    {"u_color", 0, 16},
+};
+inline constexpr UniformSlot kSlots_sprite_distort_frag[] = {
+    {nullptr, 0, 0},
+};
 
 inline constexpr ProgramUniformTable kProgramUniformTables[] = {
     { "ocean_common",
@@ -293,6 +299,11 @@ inline constexpr ProgramUniformTable kProgramUniformTables[] = {
           { kSlots_glow_draw_vert, 0, 0 },
       // frag
           { kSlots_glow_draw_frag, 1, 16 }, },
+    { "sprite_distort",
+      // vert
+          { kSlots_sprite_distort_vert, 1, 16 },
+      // frag
+          { kSlots_sprite_distort_frag, 0, 0 }, },
 };
 
 }  // namespace dkgl

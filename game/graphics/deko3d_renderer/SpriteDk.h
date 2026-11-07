@@ -141,6 +141,12 @@ using AnimFn = void (*)(DmaFollower& dma, const void* ee_mem);
 // DMA right after the HUD's nop/flushe packet and walks the glow transfers itself (dk_renderer
 // dk_glow -> the UNCHANGED GL GlowRenderer through dkgl, occlusion probe included).
 using GlowFn = void (*)(DmaFollower& dma);
+// T127 (AI-assisted): jak2 distort section (GL Sprite3::render_distorter). The callback gets
+// the DMA at the START of the sprite bucket and consumes the whole section (setup, aspect,
+// sine tables, frame-data blocks): dk_renderer dk_distort -> the GL distort walk + draw
+// through dkgl (scattergun heat haze). When it is null the section is skipped + counted as
+// before.
+using DistortFn = void (*)(DmaFollower& dma);
 
 // Render thread, before the chain is acked. data = EE memory base (chain base).
 // FIX 112: called with the bucket id before each texture-upload bucket is replayed (and
@@ -163,7 +169,8 @@ void capture_chain(const void* data,
                    bool read_sprites = true,
                    bool head_call = true,  // false = jak2: bucket table at the offset itself
                    AnimFn anim = nullptr,
-                   GlowFn glow = nullptr);
+                   GlowFn glow = nullptr,
+                   DistortFn distort = nullptr);  // T127: jak2 distort section -> dkgl
 const CaptureStats& capture_stats();
 const std::vector<Vertex>& captured_vertices();
 const std::vector<uint32_t>& captured_indices();
