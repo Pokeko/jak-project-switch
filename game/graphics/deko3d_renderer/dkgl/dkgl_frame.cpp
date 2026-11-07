@@ -38,6 +38,7 @@
 #include "game/graphics/opengl_renderer/DirectRenderer.h"  // jak2 sky-draw / screen-filter / debug2
 #include "game/graphics/opengl_renderer/ProgressRenderer.h"  // jak2 progress 320 (loading bars + minimap)
 #include "game/graphics/opengl_renderer/Shader.h"
+#include "game/graphics/opengl_renderer/Warp.h"  // T128: jak2 gmerc-warp 317
 #include "game/graphics/opengl_renderer/ShadowRenderer.h"
 #include "game/graphics/opengl_renderer/foreground/Shadow2.h"  // §7.2 phase 2
 #include "game/graphics/opengl_renderer/foreground/Generic2.h"
@@ -231,8 +232,10 @@ constexpr int kJak1Buckets[] = {4,  10, 11, 17, 18, 24, 30, 45, 46, 47, 48, 49, 
 // shadow2 314 (§7.2 phase 2: Shadow2, same two instances GL registers), progress 320 +
 // debug2 / debug-no-zbuf2 / debug3 (§7.2 phase 2: the menus -- ProgressRenderer loading bars
 // + pause minimap and the DirectRenderer menu/HUD-text buckets, jak1 debug 67 equivalents).
+// T128 (AI-assisted): gmerc-warp 317 runs GL Warp (FramebufferCopier frame copy via
+// blit_framebuffer + Generic2 WARP) -- the scattergun's red cone (skel-gun-red-cone).
 // Still inert on
-// purpose: warp 317 (Warp needs a FramebufferCopier), particles 313 (Sprite3 works for
+// purpose: particles 313 (Sprite3 works for
 // jak2 too, but the sprite3 program is not in the T103 dkgl table yet -- a later phase)
 // and the tfrag/tie/shrub
 // buckets the native passes take over in later phases. Ascending = GL dispatch order.
@@ -280,6 +283,7 @@ constexpr int kJak2Buckets[] = {
     (int)jak2::BucketId::MERC_LCOM_WATER,
     (int)jak2::BucketId::OCEAN_NEAR,      (int)jak2::BucketId::SHADOW2,  // §7.2 phase 2
     (int)jak2::BucketId::EFFECTS,
+    (int)jak2::BucketId::GMERC_WARP,  // T128
     (int)jak2::BucketId::PROGRESS,    // §7.2 phase 2: menus (loading bars + pause minimap)
     (int)jak2::BucketId::SCREEN_FILTER,
     (int)jak2::BucketId::DEBUG2,      // §7.2 phase 2: menus + HUD text (jak1 debug 67 equiv)
@@ -793,6 +797,7 @@ std::unique_ptr<ProgressRenderer> s_progress;     // loading bars + pause-menu m
 std::unique_ptr<DirectRenderer> s_debug2;         // menus + HUD text
 std::unique_ptr<DirectRenderer> s_debug_no_zbuf2;
 std::unique_ptr<DirectRenderer> s_debug3;
+std::unique_ptr<Warp> s_warp;  // T128: jak2 gmerc-warp 317
 
 // #19 (AI-assisted): jak1 eye.gc puts each level's NPC eyes in that level's pris-tex bucket
 // (48 / 51), right after the page holding their iris/pupil/lid; only common characters (Jak,
@@ -1243,6 +1248,18 @@ bool init_jak2_foreground(TexturePool* pool, int loaded) {
               Generic2::Mode::NORMAL);
   add_merc((int)jak2::BucketId::MERC_LCOM_WATER, "merc-lcom-water", 0);
   add_generic((int)jak2::BucketId::EFFECTS, "effects", 0, Generic2::Mode::LIGHTNING);
+  {
+    // T128: same as GL init_bucket_renderers_jak2 ("warp", GMERC_WARP, m_generic2). Its
+    // FramebufferCopier's GL calls go through dkgl (FBO + texture; the copy is
+    // blit_framebuffer frame -> FBO texture, the DepthCue path).
+    const int i = list_index((int)jak2::BucketId::GMERC_WARP);
+    if (i >= 0) {
+      s_warp = std::make_unique<Warp>("warp", (int)jak2::BucketId::GMERC_WARP, s_generic2);
+      s_warp->init_shaders(s_srs->shaders);
+      s_warp->init_textures(*pool, GameVersion::Jak2);
+      s_renderers[i] = s_warp.get();
+    }
+  }
   s_blackout = std::make_unique<FullScreenDraw>();  // static quad -> persistent storage
   switch_run_logf(
       "[dkgl] jak2 init ok: programs=%d buckets=%d (merc2 x%d generic2 x%d + sky, ocean x2,"

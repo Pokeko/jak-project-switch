@@ -71,6 +71,9 @@ u64 g_bad_draw_buffers_count = 0;
 bool g_logged_tex_data = false;
 u64 g_unsupported_blit_count = 0;  // T112
 u64 g_respecify_count = 0;         // T112: level-0 tex_image_2d with new dims/format
+// T128: dktexgpu id -> dkgl texture id, for every id resolve_texture_id handed out
+// (old ids stay mapped after a respecify: they are not freed or reused, P8).
+std::unordered_map<u32, u32> g_exported;
 
 TexObj* tex_by_gl(u32 gl_id) {
   if (gl_id < kTexIdBase + 1 || gl_id > kTexIdBase + kMaxTextures) {
@@ -144,12 +147,24 @@ void delete_textures(int n, const u32* in) {
     if (t) {
       *t = TexObj{};  // drops dk_tex_id: the image memory is NOT freed (P8, by design)
     }
+    for (auto it = g_exported.begin(); it != g_exported.end();) {
+      it = it->second == in[i] ? g_exported.erase(it) : std::next(it);
+    }
     forget_texture_binding(in[i]);
   }
 }
 void bind_texture(u32 name) {
   // >= kTexIdBase: one of OUR ids; any other nonzero name is a real dktexgpu id that
   // came through the pool path -- record it as-is. 0 unbinds. No GL work.
+  // T128: a dktexgpu id that resolve_texture_id handed out (the TexturePool seam keeps it in
+  // a tbp slot, e.g. the jak2 Warp frame copy) binds as its dkgl texture again -- like a GL
+  // name it then follows a resize (respecify), gets its T106 barrier and its tex params.
+  if (name != 0 && name < kTexIdBase) {
+    const auto it = g_exported.find(name);
+    if (it != g_exported.end()) {
+      name = it->second;
+    }
+  }
   set_bound_texture(name);
 }
 void tex_parameteri(u32 pname, u32 param) {
@@ -450,6 +465,9 @@ u32 resolve_texture_id(u32 gl_id) {
     return gl_id;
   }
   const u32 dk = materialize(*t, gl_id);  // T126: depth textures return the frame alias
+  if (dk != 0 && !t->depth) {
+    g_exported[dk] = gl_id;  // T128
+  }
   return dk != 0 ? dk : gl_id;
 }
 u32 materialized_dk_tex(u32 gl_id) {
