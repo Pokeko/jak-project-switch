@@ -167,6 +167,22 @@ inline constexpr UniformSlot kSlots_tex_anim_frag[] = {
     {"maximum", 112, 16},
     {"slime_scroll", 128, 16},
 };
+inline constexpr UniformSlot kSlots_tfrag3_vert[] = {
+    {"hvdf_offset", 0, 16},
+    {"cam_trans", 16, 16},
+    {"pc_camera", 32, 64},
+    {"camera", 96, 64},
+    {"fog_constant", 160, 16},
+    {"fog_min", 176, 16},
+    {"fog_max", 192, 16},
+    {"decal", 208, 16},
+};
+inline constexpr UniformSlot kSlots_tfrag3_frag[] = {
+    {"alpha_min", 0, 16},
+    {"alpha_max", 16, 16},
+    {"fog_color", 32, 16},
+    {"gfx_hack_no_tex", 48, 16},
+};
 inline constexpr UniformSlot kSlots_glow_depth_copy_vert[] = {
     {nullptr, 0, 0},
 };
@@ -279,6 +295,11 @@ inline constexpr ProgramUniformTable kProgramUniformTables[] = {
           { kSlots_tex_anim_vert, 3, 144 },
       // frag
           { kSlots_tex_anim_frag, 9, 144 }, },
+    { "tfrag3",
+      // vert
+          { kSlots_tfrag3_vert, 8, 224 },
+      // frag
+          { kSlots_tfrag3_frag, 4, 64 }, },
     { "glow_depth_copy",
       // vert
           { kSlots_glow_depth_copy_vert, 0, 0 },

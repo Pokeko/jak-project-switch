@@ -381,7 +381,8 @@ TEST(DkglState, ProgramHintIdentity) {
   ASSERT_NE(program_table(p), nullptr) << "ocean_common must be in the T103 table";
   EXPECT_STREQ(program_table(p)->program_name, "ocean_common");
   // inert: name not in the T103 table -> draws nothing, but nothing crashes
-  const u32 p2 = build_hinted_program("tfrag3");  // native deko3d, never through dkgl
+  // ("tfrag3" joined the table with §7.0 D, so probe with a name that stays unmapped)
+  const u32 p2 = build_hinted_program("some-unmapped-program");
   EXPECT_EQ(program_table(p2), nullptr);
   // #19: merc2 is in the table, but the native-merc A/B flag can force it inert
   EXPECT_NE(program_table(build_hinted_program("merc2")), nullptr);
@@ -687,7 +688,7 @@ TEST(DkglState, DrawFlushScriptedOceanOrder) {
 
   // 5. inert program: skipped + counted (no UBO slice, no draw)
   const u64 inert_before = inert_draw_count();
-  use_program(build_hinted_program("tfrag3"));
+  use_program(build_hinted_program("some-unmapped-program"));
   draw_arrays(gl::TRIANGLES, 0, 3);
   EXPECT_EQ(inert_draw_count(), inert_before + 1);
   EXPECT_EQ(mock.ubo_binds.size(), 6u);

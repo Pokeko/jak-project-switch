@@ -26,6 +26,7 @@ PROGRAMS = ["ocean_common", "ocean_envmap", "ocean_envmap_haze",
             "merc2",  # #19: Merc2 normal draws (characters) through dkgl
             "eye",  # #19: GL EyeRenderer (render-to-texture eyes) through dkgl
             "tex_anim",  # T125: GL TextureAnimator (jak2 skull gems) through dkgl
+            "tfrag3",  # §7.0 D: jak2 tfrag WATER buckets (GL TFragment) through dkgl
             # T126: GL GlowRenderer (jak2 light glows) through dkgl
             "glow_depth_copy", "glow_probe_on_grid", "glow_probe_downsample", "glow_draw",
             # T127: GL Sprite3::render_distorter (jak2 scattergun heat haze) through dkgl

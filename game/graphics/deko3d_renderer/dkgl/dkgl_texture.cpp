@@ -71,6 +71,8 @@ u64 g_bad_draw_buffers_count = 0;
 bool g_logged_tex_data = false;
 u64 g_unsupported_blit_count = 0;  // T112
 u64 g_respecify_count = 0;         // T112: level-0 tex_image_2d with new dims/format
+u64 g_tex_sub_count = 0;           // §7.0 D: tex_sub_image_2d calls (tfrag tod palettes)
+u64 g_bad_sub_rect_count = 0;      // §7.0 D: tex_sub_image_2d with a non-top-left rect
 // T128: dktexgpu id -> dkgl texture id, for every id resolve_texture_id handed out
 // (old ids stay mapped after a respecify: they are not freed or reused, P8).
 std::unordered_map<u32, u32> g_exported;
@@ -257,6 +259,61 @@ bool tex_image_2d(int level, u32 internal_format, int w, int h, u32 format, u32 
     }
   }
   return true;
+}
+
+// §7.0 D (AI-assisted): tfrag time-of-day palettes (GL TFragment). The tod texture is
+// created with a null glTexImage2D (dims only, level 0 fixes 8192x1), then every palette
+// change rewrites the top-left color_count x 1 texels -- exactly update_rgba8's top-left
+// sub-rect semantics. The dk image is materialized lazily on the first sub-rect at the
+// exact palette size (the null tex_image_2d reserved nothing; tod textures are never
+// rendered to), and later updates go through the deferred staging ring (the same path as
+// the native tod palettes; dk_renderer records those copies before any draw).
+bool tex_sub_image_2d(int level, int xoff, int yoff, int w, int h, u32 format, u32 type,
+                      const void* pixels) {
+  TexObj* t = tex_by_gl(bound_texture(active_unit()));
+  if (!t || level != 0 || !pixels) {
+    return false;
+  }
+  if (format != gl::RGBA || (type != gl::UNSIGNED_BYTE && type != gl::UNSIGNED_INT_8_8_8_8_REV)) {
+    ++g_bad_tex_format_count;
+    return false;
+  }
+  if (xoff != 0 || yoff != 0 || w <= 0 || h <= 0) {
+    ++g_bad_sub_rect_count;
+    return false;
+  }
+  ++g_tex_sub_count;
+#if defined(__SWITCH__)
+  if (t->dk_tex_id == 0 || w > t->w || h > t->h) {
+    // first palette of this texture (or a bigger one): (re)materialize at the exact
+    // sub-rect size. The old image, if any, is dropped, not freed (P8), like the
+    // respecify path above.
+    if (t->dk_tex_id != 0) {
+      ++g_respecify_count;
+    }
+    const u32 id = dktexgpu::upload_rgba8((u32)w, (u32)h, pixels);
+    if (id == 0) {
+      return false;
+    }
+    t->dk_tex_id = id;
+    t->w = w;
+    t->h = h;
+    t->levels = 1;
+    t->was_rendered_to = false;
+    t->barrier_done = false;
+    return true;
+  }
+  return dktexgpu::update_rgba8_deferred(t->dk_tex_id, (u32)w, (u32)h, pixels);
+#else
+  // Host build (goalc-test): same state bookkeeping as the Switch path, no GPU work --
+  // mirrors how tex_image_2d behaves off-console.
+  if (t->dk_tex_id == 0 || w > t->w || h > t->h) {
+    t->w = w;
+    t->h = h;
+    t->levels = 1;
+  }
+  return true;
+#endif
 }
 
 // ---- FBOs ----------------------------------------------------------------------

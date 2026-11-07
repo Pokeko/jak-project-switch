@@ -518,6 +518,7 @@ if(NINTENDO_SWITCH)
                       dkgl/merc2.vert dkgl/merc2.frag  # #19: characters via dkgl
                       dkgl/eye.vert dkgl/eye.frag  # #19: eyes via dkgl
                       dkgl/tex_anim.vert dkgl/tex_anim.frag  # T125: TextureAnimator via dkgl
+                      dkgl/tfrag3.vert dkgl/tfrag3.frag  # §7.0 D: tfrag water via dkgl
                       # T126: GlowRenderer (jak2 light glows) via dkgl
                       dkgl/glow_depth_copy.vert dkgl/glow_depth_copy.frag
                       dkgl/glow_probe_on_grid.vert dkgl/glow_probe_on_grid.frag
@@ -557,6 +558,7 @@ if(NINTENDO_SWITCH)
                       dkgl/direct_basic.vert dkgl/direct_basic_textured.vert
                       dkgl/emerc.vert dkgl/merc2.vert
                       dkgl/glow_depth_copy.vert dkgl/glow_draw.vert  # T126
+                      dkgl/tfrag3.vert  # §7.0 D: tfrag water (vert HEIGHT_SCALE 0.5)
                       # T127: both stages of the distorter differ (vert HEIGHT_SCALE,
                       # frag SCISSOR_HEIGHT)
                       dkgl/sprite_distort.vert dkgl/sprite_distort.frag)

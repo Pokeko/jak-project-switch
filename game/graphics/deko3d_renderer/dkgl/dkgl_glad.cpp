@@ -111,6 +111,13 @@ void GLAPIENTRY dkgl_glTexImage2D(GLenum target, GLint level, GLint internalform
   (void)border;
   tex_image_2d(level, internalformat, width, height, format, type, pixels);  // T112: level
 }
+// §7.0 D (AI-assisted): tfrag tod palette rewrites (GL TFragment's glTexSubImage2D).
+void GLAPIENTRY dkgl_glTexSubImage2D(GLenum target, GLint level, GLint xoffset,
+                                     GLint yoffset, GLsizei width, GLsizei height,
+                                     GLenum format, GLenum type, const void* pixels) {
+  (void)target;  // TEXTURE_2D only, like every dkgl texture entry point
+  tex_sub_image_2d(level, xoffset, yoffset, width, height, format, type, pixels);
+}
 void GLAPIENTRY dkgl_glGenFramebuffers(GLsizei n, GLuint* framebuffers) {
   gen_framebuffers(n, framebuffers);
 }
@@ -319,6 +326,8 @@ void install_glad() {
       reinterpret_cast<PFNGLTEXPARAMETERIPROC>(reinterpret_cast<void*>(&dkgl_glTexParameteri));
   glad_glTexImage2D =
       reinterpret_cast<PFNGLTEXIMAGE2DPROC>(reinterpret_cast<void*>(&dkgl_glTexImage2D));
+  glad_glTexSubImage2D = reinterpret_cast<PFNGLTEXSUBIMAGE2DPROC>(
+      reinterpret_cast<void*>(&dkgl_glTexSubImage2D));  // §7.0 D: tfrag tod palettes
   glad_glGenFramebuffers = reinterpret_cast<PFNGLGENFRAMEBUFFERSPROC>(
       reinterpret_cast<void*>(&dkgl_glGenFramebuffers));
   glad_glDeleteFramebuffers = reinterpret_cast<PFNGLDELETEFRAMEBUFFERSPROC>(

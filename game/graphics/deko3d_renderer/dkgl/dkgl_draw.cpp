@@ -253,6 +253,28 @@ bool attrib_map(int size, u32 type, bool normalized, bool integer, DkVtxAttribSi
     *ty = int_ty;
     return true;
   }
+  if (type == gl::UNSIGNED_SHORT) {
+    // §7.0 D: tfrag3 verts pack the time-of-day color index as 1 x u16 (an
+    // IPointer), which the map above would silently drop.
+    switch (size) {
+      case 1:
+        *sz = DkVtxAttribSize_1x16;
+        break;
+      case 2:
+        *sz = DkVtxAttribSize_2x16;
+        break;
+      case 3:
+        *sz = DkVtxAttribSize_3x16;
+        break;
+      case 4:
+        *sz = DkVtxAttribSize_4x16;
+        break;
+      default:
+        return false;
+    }
+    *ty = int_ty;
+    return true;
+  }
   if (type == gl::INT_2_10_10_10_REV) {
     *sz = DkVtxAttribSize_10_10_10_2;
     *ty = DkVtxAttribType_Snorm;  // brief pitfall: the packed format is SNORM in dk

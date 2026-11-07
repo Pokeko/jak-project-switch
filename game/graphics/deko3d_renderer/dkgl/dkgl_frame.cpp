@@ -48,6 +48,7 @@
 #include "game/graphics/opengl_renderer/foreground/Merc2.h"
 #include "game/graphics/opengl_renderer/foreground/Merc2BucketRenderer.h"
 #include "game/graphics/opengl_renderer/TextureAnimator.h"  // T125: jak2 skull gems via dkgl
+#include "game/graphics/opengl_renderer/background/TFragment.h"  // §7.0 D: tfrag water
 #include "game/graphics/opengl_renderer/sprite/GlowRenderer.h"  // T126: jak2 glows via dkgl
 #include "game/graphics/opengl_renderer/dma_helpers.h"  // T127: distort unpack_to_* helpers
 #include "game/graphics/opengl_renderer/loader/GpuBufferPool.h"
@@ -95,6 +96,8 @@ extern float g_shadow2_darken_scale;  // Shadow2.cpp (gk_dkgl_darkshadow.txt)
 #include "dksh/dkgl_solid_color_vert_dksh.h"
 #include "dksh/dkgl_tex_anim_frag_dksh.h"  // T125: TextureAnimator (jak2 skull gems)
 #include "dksh/dkgl_tex_anim_vert_dksh.h"
+#include "dksh/dkgl_tfrag3_frag_dksh.h"  // §7.0 D: tfrag water (GL TFragment)
+#include "dksh/dkgl_tfrag3_vert_dksh.h"
 #include "dksh/dkgl_glow_depth_copy_frag_dksh.h"  // T126: GlowRenderer (jak2 light glows)
 #include "dksh/dkgl_glow_depth_copy_vert_dksh.h"
 #include "dksh/dkgl_glow_draw_frag_dksh.h"
@@ -118,6 +121,7 @@ extern float g_shadow2_darken_scale;  // Shadow2.cpp (gk_dkgl_darkshadow.txt)
 #include "dksh/dkgl_shadow2_vert_jak2_dksh.h"  // §7.2 phase 2
 #include "dksh/dkgl_sprite_distort_frag_jak2_dksh.h"  // T127: frag SCISSOR_HEIGHT 416
 #include "dksh/dkgl_sprite_distort_vert_jak2_dksh.h"
+#include "dksh/dkgl_tfrag3_vert_jak2_dksh.h"  // §7.0 D: tfrag water vert HEIGHT_SCALE 0.5
 
 #include "game/switch/run_log.h"
 
@@ -278,11 +282,17 @@ constexpr int kJak2Buckets[] = {
     (int)jak2::BucketId::MERC_L4_PRIS2,  (int)jak2::BucketId::GMERC_L4_PRIS2,
     (int)jak2::BucketId::MERC_L5_PRIS2,  (int)jak2::BucketId::GMERC_L5_PRIS2,
     (int)jak2::BucketId::MERC_L0_WATER,  (int)jak2::BucketId::GMERC_L0_WATER,
+    (int)jak2::BucketId::TFRAG_W_L0_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_L1_WATER,  (int)jak2::BucketId::GMERC_L1_WATER,
+    (int)jak2::BucketId::TFRAG_W_L1_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_L2_WATER,  (int)jak2::BucketId::GMERC_L2_WATER,
+    (int)jak2::BucketId::TFRAG_W_L2_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_L3_WATER,  (int)jak2::BucketId::GMERC_L3_WATER,
+    (int)jak2::BucketId::TFRAG_W_L3_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_L4_WATER,  (int)jak2::BucketId::GMERC_L4_WATER,
+    (int)jak2::BucketId::TFRAG_W_L4_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_L5_WATER,  (int)jak2::BucketId::GMERC_L5_WATER,
+    (int)jak2::BucketId::TFRAG_W_L5_WATER,  // §7.0 D: tfrag water
     (int)jak2::BucketId::MERC_LCOM_WATER,
     (int)jak2::BucketId::OCEAN_NEAR,      (int)jak2::BucketId::SHADOW2,  // §7.2 phase 2
     (int)jak2::BucketId::EFFECTS,
@@ -444,6 +454,11 @@ ProgramShaders s_programs[] = {
      dkgl_eye_frag_dksh_size, {}, {}, false},  // #19: eyes
     {"tex_anim", dkgl_tex_anim_vert_dksh, dkgl_tex_anim_vert_dksh_size,
      dkgl_tex_anim_frag_dksh, dkgl_tex_anim_frag_dksh_size, {}, {}, false},  // T125
+    // §7.0 D (AI-assisted): jak2 tfrag WATER buckets -- the GL TFragment running
+    // unchanged through dkgl ("tfrag3" in the GL ShaderLibrary). tfrag3_no_tex is never
+    // selected on Switch (the water trees always have a tod palette).
+    {"tfrag3", dkgl_tfrag3_vert_dksh, dkgl_tfrag3_vert_dksh_size, dkgl_tfrag3_frag_dksh,
+     dkgl_tfrag3_frag_dksh_size, {}, {}, false},
     // T126: GlowRenderer (new_mode path: depth copy, probe on grid, downsample, draw)
     {"glow_depth_copy", dkgl_glow_depth_copy_vert_dksh, dkgl_glow_depth_copy_vert_dksh_size,
      dkgl_glow_depth_copy_frag_dksh, dkgl_glow_depth_copy_frag_dksh_size, {}, {}, false},
@@ -483,6 +498,7 @@ const Jak2Vert kJak2Verts[] = {
     {"glow_draw", dkgl_glow_draw_vert_jak2_dksh, dkgl_glow_draw_vert_jak2_dksh_size},
     {"sprite_distort", dkgl_sprite_distort_vert_jak2_dksh,
      dkgl_sprite_distort_vert_jak2_dksh_size},  // T127
+    {"tfrag3", dkgl_tfrag3_vert_jak2_dksh, dkgl_tfrag3_vert_jak2_dksh_size},  // §7.0 D
 };
 
 // T127: sprite_distort.frag also differs per game (SCISSOR_HEIGHT), so the frag blob is
@@ -804,6 +820,7 @@ std::unique_ptr<DirectRenderer> s_debug_no_zbuf2;
 std::unique_ptr<DirectRenderer> s_debug3;
 std::unique_ptr<Warp> s_warp;  // T128: jak2 gmerc-warp 317
 std::unique_ptr<BlitDisplays> s_blit;  // §7.0 C: jak2 bucket 3 (menu backdrop = last frame)
+std::unique_ptr<TFragment> s_water_tfrags[6];  // §7.0 D: jak2 tfrag-w-l{0..5}-water
 
 // #19 (AI-assisted): jak1 eye.gc puts each level's NPC eyes in that level's pris-tex bucket
 // (48 / 51), right after the page holding their iris/pupil/lid; only common characters (Jak,
@@ -1244,6 +1261,31 @@ bool init_jak2_foreground(TexturePool* pool, int loaded) {
                 "gmerc-l%d-water", l, Generic2::Mode::NORMAL);
     add_merc(lvl(jak2::BucketId::MERC_L0_WATER, jak2::BucketId::MERC_L1_WATER, l),
              "merc-l%d-water", l);
+  }
+  // §7.0 D (AI-assisted): the tfrag WATER buckets (GL init_bucket_renderers_jak2
+  // "tfrag-w-l%d-water"). The GL TFragment runs unchanged through the glad override:
+  // its render() self-drives the level setup from the real Loader, the tod palettes go
+  // through tex_image_2d + tex_sub_image_2d, and no_multidraw picks the per-draw path
+  // (dkgl has no EXT_indexed_multi_draw -- TFragment would call a null pointer).
+  s_srs->no_multidraw = true;
+  int water_tfrags = 0;
+  for (int l = 0; l < 6; l++) {
+    const int bucket = lvl(jak2::BucketId::TFRAG_W_L0_WATER, jak2::BucketId::TFRAG_W_L1_WATER, l);
+    const int i = list_index(bucket);
+    if (i >= 0) {
+      snprintf(name, sizeof(name), "tfrag-w-l%d-water", l);
+      // GL passes &m_texture_animators; in dkgl the T125 registry of animated-texture
+      // GL ids (s_jak2_anim_slots) fills the same anim_slot_array role.
+      s_water_tfrags[l] = std::make_unique<TFragment>(
+          name, bucket, std::vector{tfrag3::TFragmentTreeKind::WATER}, false, l,
+          &s_jak2_anim_slots);
+      s_water_tfrags[l]->init_shaders(s_srs->shaders);
+      s_renderers[i] = s_water_tfrags[l].get();
+      water_tfrags++;
+    } else {
+      switch_run_logf("[dkgl] jak2: bucket %d (tfrag-w-l%d-water) missing from kJak2Buckets",
+                      bucket, l);
+    }
   }
   add_merc((int)jak2::BucketId::MERC_LCOM_TFRAG, "merc-lcom-tfrag", 0);
   add_generic((int)jak2::BucketId::GMERC_LCOM_TFRAG, "gmerc-lcom-tfrag", 0,

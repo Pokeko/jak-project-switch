@@ -213,6 +213,9 @@ void bind_texture(u32 name);
 void tex_parameteri(u32 pname, u32 param);
 // T112: `level` is the GL mip level. Level 0 with new dimensions RESPECIFIES the texture
 // (DepthCue sizes its targets 1x1 at init, then to the screen size in setup()).
+// §7.0 D: top-left sub-rect rewrite of a live level-0 texture (tfrag tod palettes).
+bool tex_sub_image_2d(int level, int xoff, int yoff, int w, int h, u32 format, u32 type,
+                      const void* pixels);
 bool tex_image_2d(int level, u32 internal_format, int w, int h, u32 format, u32 type,
                   const void* data);
 // T126 (AI-assisted): a GL depth TEXTURE (DEPTH_COMPONENT / DEPTH24_STENCIL8 internal format)
