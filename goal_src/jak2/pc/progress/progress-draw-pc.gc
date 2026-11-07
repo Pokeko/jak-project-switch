@@ -3217,7 +3217,7 @@
               ))
           )
 
-        (when (fullscreen?)
+        (when (ps2-res-options?)
           ;; draw extra hardcoded cases
           (if (= valid-index (-> this selected-index))
               (set-color! font (progress-selected 0))

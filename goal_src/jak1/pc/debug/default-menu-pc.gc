@@ -772,3 +772,16 @@
       ;; reset things
       ;(initialize! *game-info* 'game (the-as game-save #f) (the-as string #f))
       )))
+
+;; Switch (AI-assisted): drop the debug "PC Settings > Sizes" menu. deko3d always renders at the
+;; native panel size (720p handheld / 1080p docked), so none of these sizes can take effect.
+(when (and (-> *debug-menu-context* root-menu) (= (pc-get-os) 'switch))
+  (let ((pc-menu (debug-menu-find-from-template *debug-menu-context* '("PC Settings")))
+        (sizes-item (the-as pair #f)))
+    (when pc-menu
+      (dolist (it (-> pc-menu items))
+        (if (string= (-> (the-as debug-menu-node (car it)) name) "Sizes")
+          (set! sizes-item it)))
+      (when sizes-item
+        (set! (-> pc-menu items) (delete! (car sizes-item) (-> pc-menu items)))
+        (debug-menu-rebuild pc-menu)))))

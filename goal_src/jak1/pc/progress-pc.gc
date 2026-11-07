@@ -1244,7 +1244,7 @@
     ;; if we didn't add any options, inform them they have a weird aspect ratio
     (cond
       ((zero? num-resolutions-added) (add-message-option (text-id progress-no-other-resolution-options)))
-      ((fullscreen?)
+      ((ps2-res-options?)
        ;; for the weird people that want a more "PS2-like" experience
        (add-resolution-option 512 448)
        (add-resolution-option 512 224)))

@@ -9,6 +9,10 @@
 
 #include "fmt/format.h"
 
+#if defined(__SWITCH__)
+#include "game/switch/platform.h"
+#endif
+
 DisplayManager::DisplayManager(SDL_Window* window) : m_window(window) {
   prof().instant_event("ROOT");
   {
@@ -520,6 +524,21 @@ void DisplayManager::update_video_modes() {
 
 void DisplayManager::update_resolutions() {
   lg::info("[DISPLAY] Enumerating resolutions");
+#if defined(__SWITCH__)
+  // (AI-assisted) The deko3d renderer always draws straight into the swapchain, which is
+  // created once at the panel size (720p handheld, 1080p docked) and never resized, so any
+  // other resolution choice did nothing. Offer only that native size: the menu shows the
+  // real render size, and `pc-is-supported-resolution?` snaps a stale saved game-size
+  // (e.g. 1080p saved while docked, now booted handheld) back to it via
+  // `pc-get-active-display-size`. SDL's list (always the docked 1080p mode) is skipped.
+  const auto native = switch_platform::get_created_window_size();
+  const Resolution native_res = {native.w, native.h,
+                                 static_cast<float>(native.w) / static_cast<float>(native.h)};
+  lg::info("[DISPLAY]: Switch native size only: {}x{}", native.w, native.h);
+  m_available_resolutions.assign(1, native_res);
+  m_available_window_sizes.assign(1, native_res);
+  return;
+#endif
   // Enumerate display's display modes to get the resolutions
   const auto active_display_index = get_active_display_index();
   if (active_display_index >= m_current_display_modes.size()) {
@@ -564,25 +583,6 @@ void DisplayManager::update_resolutions() {
     m_available_resolutions.push_back(new_res);
     m_available_window_sizes.push_back(new_res);
   }
-
-#if defined(__SWITCH__)
-  // devkitPro's SDL only reports the display mode the takeover applet was set up with
-  // (docked 1080p) -- the console's handheld 720p mode never shows up, so the resolution
-  // menu offers a single useless entry and `pc-is-supported-resolution?` rejects a saved
-  // 720p game size (boot then logs "fullscreen resolution defaulted to 1920 x 1080").
-  // The Switch only ever has these two physical modes and both are valid to present in
-  // either operation mode, so offer them both. The dedup pass below removes 1080p if SDL
-  // already reported it.
-  //
-  // Only the two real panel modes are offered: the deko3d renderer always draws at the
-  // native size of the current operation mode (720p handheld, 1080p docked), so the old
-  // sub-native FSR rungs (1600x900, 960x540, 640x360) did nothing there.
-  lg::info("[DISPLAY]: adding Switch console modes 1920x1080, 1280x720");
-  m_available_resolutions.push_back({1920, 1080, 1920.0f / 1080.0f});
-  m_available_resolutions.push_back({1280, 720, 1280.0f / 720.0f});
-  m_available_window_sizes.push_back({1920, 1080, 1920.0f / 1080.0f});
-  m_available_window_sizes.push_back({1280, 720, 1280.0f / 720.0f});
-#endif
 
   // Sort by area
   std::sort(m_available_resolutions.begin(), m_available_resolutions.end(),

@@ -792,12 +792,12 @@
             ;; yay
             )
           ;; 512x416
-          ((and (fullscreen?) (= resolutions-valid (-> this selected-index)))
+          ((and (ps2-res-options?) (= resolutions-valid (-> this selected-index)))
             (set! select-w 512)
             (set! select-h 416)
             )
           ;; 512x208
-          ((and (fullscreen?) (= (1+ resolutions-valid) (-> this selected-index)))
+          ((and (ps2-res-options?) (= (1+ resolutions-valid) (-> this selected-index)))
             (set! select-w 512)
             (set! select-h 208)
             )
@@ -808,7 +808,7 @@
           )
 
         ;; hardcoded cases
-        (when (fullscreen?)
+        (when (ps2-res-options?)
           (+! resolutions-valid 2))
         )
       ;; not sure what happened, but there's not even any resolutions

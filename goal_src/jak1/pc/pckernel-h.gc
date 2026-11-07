@@ -432,6 +432,11 @@
 (defmacro fullscreen? ()
   `(or (= (pc-get-display-mode) 'fullscreen) (= (pc-get-display-mode) 'borderless)))
 
+(defmacro ps2-res-options? ()
+  "should the resolution menu offer the extra PS2-like sizes? Not on Switch (AI-assisted):
+   deko3d always renders at the native panel size, so the menu only lists that one."
+  `(and (fullscreen?) (!= (pc-get-os) 'switch)))
+
 (defun bcd->dec ((bcd uint))
   "Convert a number encoded in BCD to its decimal equivalent"
   (+ (* (shr (logand bcd #xf0) 4) 10) (logand bcd #x0f)))
