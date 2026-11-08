@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
+#include <vector>
 
 #include "game/graphics/deko3d_renderer/dkgl/dkgl_gl_enums.h"
 #include "game/graphics/deko3d_renderer/dkgl/dkgl_state.h"
@@ -68,7 +69,16 @@ u64 g_bad_tex_param_count = 0;  // tex_parameteri on a pname we don't store
 u64 g_bad_tex_format_count = 0;
 u64 g_rt_no_dims_count = 0;  // materialize before any tex_image_2d
 u64 g_bad_draw_buffers_count = 0;
+#if defined(__SWITCH__)
 bool g_logged_tex_data = false;
+// log the first failed level-0 pixel upload (bad format / ring + sync both failed)
+void dk_failed_upload() {
+  if (!g_logged_tex_data) {
+    std::fprintf(stderr, "[dkgl] tex_image_2d pixel upload failed (format/size)\n");
+    g_logged_tex_data = true;
+  }
+}
+#endif
 u64 g_unsupported_blit_count = 0;  // T112
 u64 g_respecify_count = 0;         // T112: level-0 tex_image_2d with new dims/format
 u64 g_tex_sub_count = 0;           // §7.0 D: tex_sub_image_2d calls (tfrag tod palettes)
@@ -249,14 +259,34 @@ bool tex_image_2d(int level, u32 internal_format, int w, int h, u32 format, u32 
   } else if ((u32)level + 1 > t->levels) {
     t->levels = (u32)level + 1;
   }
-  if (data) {
-    // pixel uploads are NOT part of the ocean surface (the census stub would have
-    // logged it); keep recording the mip bookkeeping and ignore the pixels.
+  if (data && level == 0) {
+    // TextureAnimator uploads (clut-blender outputs, fixed-anim sources, vram entries,
+    // GL_RED sky noise): level-0 texels into the lazily created image through the
+    // deferred staging ring (copies land before the next frame's draws). Other levels
+    // come from glGenerateMipmap.
     ++g_tex_data_count;
-    if (!g_logged_tex_data) {
-      std::fprintf(stderr, "[dkgl] tex_image_2d with data unsupported (ocean never does this)\n");
-      g_logged_tex_data = true;
+#if defined(__SWITCH__)
+    if (dkdev::is_up() && dktexgpu::active()) {
+      const u32 dk = materialize(*t, bound_texture(active_unit()));
+      const void* px = data;
+      std::vector<u32> expanded;
+      if (format == gl::RED && type == gl::UNSIGNED_BYTE) {
+        // GL samples a RED texture as (r, 0, 0, 1)
+        const u8* src = static_cast<const u8*>(data);
+        expanded.resize((size_t)w * h);
+        for (size_t i = 0; i < expanded.size(); i++) {
+          expanded[i] = (u32)src[i] | 0xff000000u;
+        }
+        px = expanded.data();
+      } else if (format != gl::RGBA) {
+        dk_failed_upload();
+        return true;
+      }
+      if (dk == 0 || !dktexgpu::update_rgba8_deferred(dk, (u32)w, (u32)h, px)) {
+        dk_failed_upload();
+      }
     }
+#endif
   }
   return true;
 }
