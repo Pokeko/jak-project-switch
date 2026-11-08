@@ -1335,10 +1335,13 @@ void TextureAnimator::handle_texture_anim_data(DmaFollower& dma,
                   anim_code_to_info(static_cast<PcTextureAnimCodesJak2>(vif0.immediate), *this);
               auto p = scoped_prof(anim.name.c_str());
 #if defined(__SWITCH__)
-              // jak2 (AI-assisted): under dkgl only the skull gem composites; the other
-              // animations (clouds, holo signs, ...) drew wrong and cost GPU time.
-              dkgl::set_int_attrib_draws(vif0.immediate ==
-                                         (u16)PcTextureAnimCodesJak2::SKULL_GEM);
+              // jak2 (AI-assisted): under dkgl only the skull gem runs. The other arrays
+              // published empty outputs over the static textures (gray plants/enemies, green
+              // smoke box, doors), so they are not run at all: the static texture stays.
+              if (vif0.immediate != (u16)PcTextureAnimCodesJak2::SKULL_GEM) {
+                break;
+              }
+              dkgl::set_int_attrib_draws(true);
 #endif
               run_fixed_animation_array(anim.anim_array_idx, tf, texture_pool);
 #if defined(__SWITCH__)
@@ -1480,13 +1483,26 @@ void TextureAnimator::handle_texture_anim_data(DmaFollower& dma,
   // The steps above will populate m_textures with some combination of GPU/CPU textures.
   // we need to make sure that all final textures end up on the GPU, if desired. (todo: move this to
   // happen somewhere else)?
+#if defined(__SWITCH__)
+  // jak2 (AI-assisted): the DMA-driven composites can't draw under dkgl, so publishing them
+  // would replace the static textures with empty ones. Keep the static textures.
+  const bool publish_dma_textures = m_version != GameVersion::Jak2;
+#else
+  const bool publish_dma_textures = true;
+#endif
   for (auto tbp : m_force_to_gpu) {
+    if (!publish_dma_textures) {
+      break;
+    }
     auto p = scoped_prof("force-to-gpu");
     force_to_gpu(tbp);
   }
 
   // Loop over textures and put them in the pool if needed
   for (auto& [tbp, entry] : m_textures) {
+    if (!publish_dma_textures) {
+      break;
+    }
     if (entry.kind != VramEntry::Kind::GPU) {
       // not on the GPU, we can't put it in the texture pool.
       // if it was skipped by the above step, this is just some temporary texture we don't need
@@ -1653,6 +1669,11 @@ void TextureAnimator::run_clut_blender_group(DmaTransfer& tf,
                                              int idx,
                                              u64 frame_idx,
                                              TexturePool* texture_pool) {
+#if defined(__SWITCH__)
+  if (m_version == GameVersion::Jak2) {
+    return;  // jak2 dkgl (AI-assisted): keep the static textures, see SKULL_GEM above.
+  }
+#endif
   auto& blenders = m_clut_blender_groups.at(idx);
   const int tbps_size = sizeof(u32) * 4 * ((blenders.blenders.size() + 3) / 4);
   float f;
@@ -1733,6 +1754,11 @@ void TextureAnimator::handle_clouds_and_fog(const DmaTransfer& tf,
 }
 
 void TextureAnimator::handle_slime(const DmaTransfer& tf, TexturePool* texture_pool) {
+#if defined(__SWITCH__)
+  if (m_version == GameVersion::Jak2) {
+    return;  // jak2 dkgl (AI-assisted): keep the static textures, see SKULL_GEM above.
+  }
+#endif
   ASSERT(tf.size_bytes >= sizeof(SlimeInput));
   SlimeInput input;
   memcpy(&input, tf.data, sizeof(SlimeInput));
