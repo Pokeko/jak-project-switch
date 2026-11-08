@@ -91,7 +91,7 @@ FrameTiming present_frame(bool show_splash);
 dkring::FrameRing* ubo_ring();
 
 //! T106 (AI-assisted): sampler-descriptor slot of a dkgl sampler combo (bit0
-//! min_linear | bit1 mag_linear | bit2 mip_linear | bit3 repeat_s | bit4 repeat_t), written at splash
+//! min_linear | bit1 mag_linear | bit2 mip_linear | bit3 repeat), written at splash
 //! init right after the T34a table. Returns kSamplerCount + combo.
 uint32_t dkgl_sampler_slot(uint32_t combo);
 

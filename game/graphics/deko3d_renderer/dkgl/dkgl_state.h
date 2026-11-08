@@ -350,7 +350,7 @@ u32 pending_target_level();         // mip level attached to the pending offscre
 u32 pending_target_depth_dk_tex();  // T126: depth attachment of the pending FBO (0 = none)
 u32 bound_framebuffer();
 void pending_target_consumed();
-u32 texture_sampler_combo(u32 gl_id);  // bit0 min_linear | bit1 mag_linear | bit2 mip_linear | bit3 repeat_s | bit4 repeat_t
+u32 texture_sampler_combo(u32 gl_id);  // bit0 min_linear | bit1 mag_linear | bit2 mip_linear | bit3 repeat
 
 #if defined(__SWITCH__)
 // dkgl_glad.cpp: overwrite the dk_gl_census no-op stubs for the dkgl subset. The

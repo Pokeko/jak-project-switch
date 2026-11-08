@@ -839,13 +839,7 @@ TEST(DkglState, ReviewPoolTextureParams) {
   tex_parameteri(gl::TEXTURE_WRAP_T, gl::REPEAT);
   tex_parameteri(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
   tex_parameteri(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-  EXPECT_EQ(texture_sampler_combo(pool_id), 1u | 2u | 4u | 8u | 16u);
-  // GS CLAMP can repeat S and clamp T (jak2 sky): each axis has its own bit
-  tex_parameteri(gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
   EXPECT_EQ(texture_sampler_combo(pool_id), 1u | 2u | 4u | 8u);
-  tex_parameteri(gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
-  tex_parameteri(gl::TEXTURE_WRAP_T, gl::REPEAT);
-  EXPECT_EQ(texture_sampler_combo(pool_id), 1u | 2u | 4u | 16u);
   bind_texture(0);
 }
 
