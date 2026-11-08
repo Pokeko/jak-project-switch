@@ -202,6 +202,9 @@ struct Segment {
   DkImageRect blit_src{}, blit_dst{};
   bool blit_linear = false;
   bool blit_prev = false;  // §7.0 C: copy from last frame's image (jak2 BlitDisplays, bucket 3)
+  // T129a (AI-assisted): glGenerateMipmap -- level L-1 -> L blits inside blit_dst_tex.
+  // blit_src holds the level-0 rect; the replay halves it per level.
+  u32 blit_mips = 0;
 };
 struct BucketLists {
   std::vector<Segment> segs;
@@ -676,6 +679,24 @@ class SwitchEmitter final : public Emitter {
     seg.blit_linear = linear;
     seg.blit_prev = s_bucket_ids == s_jak2_ids &&
                     s_bucket_ids[s_cur_bucket] == (int)jak2::BucketId::BUCKET_3;
+    s_lists[s_cur_bucket].segs.push_back(seg);
+    open_segment(frame);
+  }
+  // T129a (AI-assisted): glGenerateMipmap on a dkgl render target. Same shape as
+  // blit_frame_to_tex: end the list, queue a blit segment (record_bucket replays it as
+  // level -> level blits inside the image), continue on the same target.
+  void generate_mips(u32 dk_tex_id, u32 levels, u32 w, u32 h) override {
+    if (!s_recording || s_cur_bucket < 0 || levels <= 1 || w == 0 || h == 0) {
+      return;
+    }
+    const bool frame = s_seg_frame;
+    close_segment();
+    Segment seg;
+    seg.blit = true;
+    seg.blit_mips = levels;
+    seg.blit_dst_tex = dk_tex_id;
+    seg.blit_src = DkImageRect{0, 0, 0, w, h, 1};  // level-0 rect; the replay halves it
+    seg.blit_linear = true;                        // ~ GL's box filter
     s_lists[s_cur_bucket].segs.push_back(seg);
     open_segment(frame);
   }
@@ -2317,13 +2338,38 @@ bool record_bucket(int bucket) {
     if (seg.blit) {
       const DkImage* img = (const DkImage*)dktexgpu::image_of(seg.blit_dst_tex);
       if (img) {
-        DkImageView dst;
-        dkImageViewDefaults(&dst, img);
-        const u32 flags = seg.blit_linear ? DkBlitFlag_FilterLinear : DkBlitFlag_FilterNearest;
-        if (seg.blit_prev) {
-          dkdev::blit_prev_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+        if (seg.blit_mips > 1) {
+          // T129a (AI-assisted): glGenerateMipmap -- linear-filtered level L-1 -> L blits
+          // inside the same image. Full barrier up front (the FBO composite pass wrote
+          // level 0 with the 3D engine), then after every level, so the next blit and the
+          // later sprite draws sample fresh texels (pitfall P3).
+          dkCmdBufBarrier(cb, DkBarrier_Full, 0);
+          u32 w = seg.blit_src.width, h = seg.blit_src.height;
+          for (u32 lvl = 1; lvl < seg.blit_mips && (w > 1 || h > 1); ++lvl) {
+            const u32 nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
+            DkImageView src, dst;
+            dkImageViewDefaults(&src, img);
+            src.mipLevelOffset = (uint8_t)(lvl - 1);
+            src.mipLevelCount = 1;
+            dkImageViewDefaults(&dst, img);
+            dst.mipLevelOffset = (uint8_t)lvl;
+            dst.mipLevelCount = 1;
+            const DkImageRect srect{0, 0, 0, w, h, 1};
+            const DkImageRect drect{0, 0, 0, nw, nh, 1};
+            dkCmdBufBlitImage(cb, &src, &srect, &dst, &drect, DkBlitFlag_FilterLinear, 0);
+            dkCmdBufBarrier(cb, DkBarrier_Full, DkInvalidateFlags_Image);
+            w = nw;
+            h = nh;
+          }
         } else {
-          dkdev::blit_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+          DkImageView dst;
+          dkImageViewDefaults(&dst, img);
+          const u32 flags = seg.blit_linear ? DkBlitFlag_FilterLinear : DkBlitFlag_FilterNearest;
+          if (seg.blit_prev) {
+            dkdev::blit_prev_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+          } else {
+            dkdev::blit_frame_to(&dst, &seg.blit_src, &seg.blit_dst, flags);
+          }
         }
       }
       continue;

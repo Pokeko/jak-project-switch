@@ -395,6 +395,30 @@ bool blit_framebuffer(int sx0, int sy0, int sx1, int sy1, int dx0, int dy0, int 
 u64 unsupported_blit_count() {
   return g_unsupported_blit_count;
 }
+// T129a (AI-assisted): glGenerateMipmap. The TextureAnimator composites each frame into
+// the FBO target's level 0 and then regenerates the chain; dkgl allocated the whole mip
+// chain (create_render_target_mipped) but only level 0 is ever written, so the small mips
+// sample garbage (HW: skull gems were flat orange discs). There is no readback on the
+// Switch: queue GPU downsample blits level L-1 -> L. The emitter records them into the
+// CURRENT bucket (the tex-anim list), right after the composite pass.
+// Guard: only a dkgl-created mipped COLOUR target can do this -- pool ids never resolve
+// here, and tex_sub_image_2d materializes single-level images and resets `levels`, so
+// `levels > 1` implies the image was created with that many mip levels.
+void generate_mips_flush(u32 gl_id) {
+  TexObj* t = tex_by_gl(gl_id);
+  if (!t || t->depth || t->renderbuffer || t->levels <= 1 || t->w <= 0 || t->h <= 0) {
+    return;
+  }
+  const u32 dk = materialize(*t, gl_id);
+  if (dk == 0) {
+    return;  // Switch-side create failed (the host fake-id scheme never fails)
+  }
+  t->was_rendered_to = true;  // mips 1+ written: the next sample needs the T106 barrier
+  t->barrier_done = false;
+  if (Emitter* e = emitter()) {
+    e->generate_mips(dk, t->levels, (u32)t->w, (u32)t->h);
+  }
+}
 void bind_framebuffer(u32 name) {
   // Leaving an offscreen FBO means its texture was rendered to: T106 flushes the
   // render-to-texture barrier before the first draw that samples it. Re-binding the

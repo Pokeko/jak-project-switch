@@ -118,6 +118,12 @@ void GLAPIENTRY dkgl_glTexSubImage2D(GLenum target, GLint level, GLint xoffset,
   (void)target;  // TEXTURE_2D only, like every dkgl texture entry point
   tex_sub_image_2d(level, xoffset, yoffset, width, height, format, type, pixels);
 }
+// T129a (AI-assisted): the animator regenerates its mip chain after the FBO composite.
+// Operates on the texture bound to the CURRENT unit, like GL.
+void GLAPIENTRY dkgl_glGenerateMipmap(GLenum target) {
+  (void)target;  // TEXTURE_2D only, like every dkgl texture entry point
+  generate_mips_flush(bound_texture(active_unit()));
+}
 void GLAPIENTRY dkgl_glGenFramebuffers(GLsizei n, GLuint* framebuffers) {
   gen_framebuffers(n, framebuffers);
 }
@@ -328,6 +334,8 @@ void install_glad() {
       reinterpret_cast<PFNGLTEXIMAGE2DPROC>(reinterpret_cast<void*>(&dkgl_glTexImage2D));
   glad_glTexSubImage2D = reinterpret_cast<PFNGLTEXSUBIMAGE2DPROC>(
       reinterpret_cast<void*>(&dkgl_glTexSubImage2D));  // §7.0 D: tfrag tod palettes
+  glad_glGenerateMipmap = reinterpret_cast<PFNGLGENERATEMIPMAPPROC>(
+      reinterpret_cast<void*>(&dkgl_glGenerateMipmap));  // T129a: animator mips
   glad_glGenFramebuffers = reinterpret_cast<PFNGLGENFRAMEBUFFERSPROC>(
       reinterpret_cast<void*>(&dkgl_glGenFramebuffers));
   glad_glDeleteFramebuffers = reinterpret_cast<PFNGLDELETEFRAMEBUFFERSPROC>(

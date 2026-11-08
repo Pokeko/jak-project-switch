@@ -154,6 +154,15 @@ class MockEmitter : public Emitter {
     tex_binds.push_back({unit, dk_tex_id, combo});
   }
   void set_primitive_restart(bool, u32) override { log += "restart;"; ++restart_sets; }
+  // T129a (AI-assisted): glGenerateMipmap bookkeeping
+  struct MipCall {
+    u32 dk_tex_id, levels, w, h;
+  };
+  std::vector<MipCall> mip_calls;
+  void generate_mips(u32 dk_tex_id, u32 levels, u32 w, u32 h) override {
+    log += "mips;";
+    mip_calls.push_back({dk_tex_id, levels, w, h});
+  }
   u32 frame_target_calls = 0;
   std::vector<u32> offscreen_ids;
   void bind_frame_target() override {
@@ -487,6 +496,47 @@ TEST(DkglState, RenderTargetLazyMaterialize) {
   texture_barrier_sent(tex);
   EXPECT_FALSE(texture_needs_barrier(tex));
   pending_target_consumed();  // test hygiene: don't leak the queue into the next test
+  set_emitter(nullptr);
+}
+
+// T129a (AI-assisted): glGenerateMipmap on the animator's composite target. A mipped
+// colour target queues the level blits + the T106 sample barrier; a single-level
+// texture (or anything the flush can't handle) is a no-op.
+TEST(DkglState, GenerateMipsFlush) {
+  MockEmitter mock;
+  set_emitter(&mock);
+  u32 tex = 0;
+  gen_textures(1, &tex);
+  bind_texture(tex);
+  // FramebufferTexturePair allocation loop: level i at w>>i x h>>i, 64 -> 1 (7 levels)
+  for (int lvl = 0; lvl < 7; ++lvl) {
+    const int dim = 64 >> lvl;
+    ASSERT_TRUE(tex_image_2d(lvl, gl::RGBA8, dim, dim, gl::RGBA, gl::UNSIGNED_INT_8_8_8_8_REV,
+                             nullptr));
+  }
+  generate_mips_flush(tex);
+  ASSERT_EQ(mock.mip_calls.size(), 1u);
+  EXPECT_EQ(mock.mip_calls[0].levels, 7u);
+  EXPECT_EQ(mock.mip_calls[0].w, 64u);
+  EXPECT_EQ(mock.mip_calls[0].h, 64u);
+  const u32 dk_id = materialized_dk_tex(tex);
+  ASSERT_NE(dk_id, 0u);
+  EXPECT_EQ(mock.mip_calls[0].dk_tex_id, dk_id);
+  EXPECT_TRUE(texture_needs_barrier(tex));  // mips written -> the next sample needs it
+  texture_barrier_sent(tex);
+  EXPECT_FALSE(texture_needs_barrier(tex));
+  // second call: same materialized image, queued again (like every anim frame)
+  generate_mips_flush(tex);
+  ASSERT_EQ(mock.mip_calls.size(), 2u);
+  EXPECT_EQ(mock.mip_calls[1].dk_tex_id, dk_id);
+  // single-level texture: nothing to generate, no emitter traffic
+  u32 flat = 0;
+  gen_textures(1, &flat);
+  bind_texture(flat);
+  ASSERT_TRUE(tex_image_2d(0, gl::RGBA8, 32, 32, gl::RGBA, gl::UNSIGNED_INT_8_8_8_8_REV, nullptr));
+  generate_mips_flush(flat);
+  EXPECT_EQ(mock.mip_calls.size(), 2u);
+  bind_texture(0);
   set_emitter(nullptr);
 }
 

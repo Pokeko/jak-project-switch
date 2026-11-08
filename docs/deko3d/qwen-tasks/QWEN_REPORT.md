@@ -5011,4 +5011,20 @@ T107/check-switch as specified. No STOP conditions unresolved; no commit.
 ## T104a report (2026-10-26, assistant-executed; Qwen 34-min attempt produced 0 files, killed)
 - Created: `dkgl/dkgl_state.h` (170 ln, verbatim per spec), `dkgl/dkgl_state.cpp` (232 ln), `test/test_dkgl_state.cpp` (86 ln, 5 tests).
 - Qwen's real find honored: host goalc-test lacked the deko3d include path. Fix (deviation 1): `target_include_directories(goalc-test SYSTEM PRIVATE third-party/deko3d/include)` — deko3d.h is declaration-only and nothing links dk* on host, so no ifdefs were needed. Deviation 2: task said "stub every entry point" but its own tests require real shadow updates — state/buffer/VAO entry points have real bodies; GPU-meaningful ones stay `/* implemented in T104b/T105/T106 */` stubs. Test 5's dirty-flag API skipped per task's "prefer no new API".
-- Gates: host build links; `Dkgl*` gtest 7/7 PASSED (5 new + 2 T103); check-dk PASS (14 files, 0 errors). Nothing committed.
+- Gates: host build links; `Dkgl*` gtest 7/7 PASSED (5 new + 2 T103); check-dk PASS (14 files,
+  0 errors). Nothing committed.
+
+
+## T129 report (2026-11-08, assistant-executed — item G, `glGenerateMipmap` half)
+- Done by the main agent (task file kept as the spec). Files: `dkgl/dkgl_glad.cpp`
+  (`dkgl_glGenerateMipmap` hook + `install_glad` pointer), `dkgl/dkgl_texture.cpp`
+  (`generate_mips_flush`: bound texture, mipped colour targets only; `tex_sub`
+  single-level materializations reset `levels`, so they can never queue blits),
+  `dkgl/dkgl_state.h` (`Emitter::generate_mips(dk_tex_id, levels, w, h)`),
+  `dkgl/dkgl_frame.cpp` (`Segment.blit_mips` + emitter override + `record_bucket` replay:
+  linear `dkCmdBufBlitImage` level L-1 -> L inside the same DkImage, `DkBarrier_Full`
+  before + image-invalidate after each level), `test/test_dkgl_state.cpp`
+  (`GenerateMipsFlush` + MockEmitter counter).
+- Gates: check-dk PASS (6 files); check-switch jak2 PASS `e1a97e35a4eefdbdd0835fdb0d8d6b80`;
+  check-switch jak1 PASS `e62dd65a706212897b8ed730543b194f`; goalc-test `DkglState.*`
+  36/36. Item G's other half (`glClearBufferfv`) still open — DKGL_TODO G updated.

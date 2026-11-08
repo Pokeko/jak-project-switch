@@ -69,6 +69,12 @@ struct Emitter {
                                  bool linear) {
     (void)dk_tex_id, (void)src, (void)dst, (void)linear;
   }
+  // T129a (AI-assisted): glGenerateMipmap on a dkgl texture (TextureAnimator) -- queue
+  // level L-1 -> L downsample blits inside the same DkImage. w/h = the level-0 rect,
+  // the replay halves it per level. The host mock ignores it by default.
+  virtual void generate_mips(u32 dk_tex_id, u32 levels, u32 w, u32 h) {
+    (void)dk_tex_id, (void)levels, (void)w, (void)h;
+  }
   // targets / clears / ordering
   virtual void bind_frame_target() = 0;  // FBO 0 = the dk frame colour+depth target
   // dk texture id + mip level: the ocean renders its mip chain level by level
@@ -310,6 +316,7 @@ u32 pending_clear_mask();       // glClear bits recorded, flushed by the T106 dr
 // program draws nothing, by design).
 u32 resolve_texture_id(u32 gl_id);      // dkgl pseudo id -> dktexgpu id; passthrough otherwise
 u32 materialized_dk_tex(u32 gl_id);     // 0 = none / unknown id
+void generate_mips_flush(u32 gl_id);     // T129a: bound texture, materialize + queue blits
 bool texture_needs_barrier(u32 gl_id);  // was rendered to and no barrier sent yet
 void texture_barrier_sent(u32 gl_id);
 const ProgramUniformTable* program_table(u32 program);  // null = inert
