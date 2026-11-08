@@ -1,140 +1,88 @@
 # Jak Project Switch
 
-> **Unofficial, non-commercial fan project.** This is an unofficial Nintendo Switch
-> port of the [OpenGOAL project](https://github.com/open-goal/jak-project). It is
-> **not** affiliated with, endorsed by, or sponsored by the OpenGOAL team, Naughty Dog,
-> Sony Interactive Entertainment, or Nintendo.
+> ⚠️ **Disclaimer: Unofficial, non-commercial fan project.**  
+> This is an unofficial Nintendo Switch port of the [OpenGOAL project](https://github.com/open-goal/jak-project). It is **not** affiliated with, endorsed by, or sponsored by the OpenGOAL team, Naughty Dog, Sony Interactive Entertainment, or Nintendo.
 
-OpenGOAL decompiles and recompiles the original Jak and Daxter trilogy (Jak 1 -> Jak 3)
-so it can run natively, using GOAL, a custom LISP language developed by Naughty Dog.
-This repository adapts that work to run on the Nintendo Switch.
+OpenGOAL decompiles and recompiles the original *Jak and Daxter* trilogy (*Jak 1* → *Jak 3*) to run natively using GOAL, a custom LISP language developed by Naughty Dog. 
 
-## Attribution and licensing
+This repository adapts that work to run on the Nintendo Switch, replacing the upstream OpenGL rendering pipeline with a custom low-level **deko3D** rendering backend target for optimal 60 FPS hardware performance.
 
-- The overwhelming majority of this code comes from
-  [open-goal/jak-project](https://github.com/open-goal/jak-project), used under the
-  ISC License — see [LICENSE](LICENSE).
-- Full attribution for OpenGOAL, devkitPro/libnx and other third-party components is in
-  [CREDITS.md](CREDITS.md).
-- **If you want to support this work, support OpenGOAL instead** — this repository accepts
-  no donations and is not sold or monetised in any form.
+---
 
-## Pre-compiled binaries, mirrors and re-uploads
+## Technical Architecture & Rendering
 
-The pre-compiled Switch binaries (`.nro` files) and the extractor/goalc tooling published
-in this repository's [releases](https://github.com/fildicio/jak-project-switch/releases)
-are built and published by **fildicio**.
+- **Engine Core:** Powered by the OpenGOAL C++ runtime (`gk`) executing compiled GOAL bytecode natively on ARM64 (`aarch64`).
+- **Graphics Pipeline:** Translated from desktop OpenGL to Horizon OS native **deko3D** API for low overhead and locked frame rates.
+- **Platform Tooling:** Built using the [devkitPro / libnx](https://github.com/switchbrew/libnx) homebrew toolchain.
 
-- **Re-uploading, mirroring, or sharing the pre-compiled binaries** (NROs,
-  `extractor.exe`, `goalc.exe`) **is not allowed without explicit attribution to
-  fildicio** and a link to the
-  [official repository](https://github.com/fildicio/jak-project-switch).
-- Re-uploads that strip or omit this attribution are not permitted. If you see this
-  project's binaries posted elsewhere without credit, please report it.
-- Official builds display a compiled-in **"made by fildicio"** credit on the game's boot
-  splash screen (and the same line in `gk_boot_log.txt`). Binaries without it did not
-  come from these releases.
-- Building from source yourself is of course fine — this remains open-source software;
-  the terms above cover the binaries published here.
+---
 
-## No game assets are distributed
+## Attribution & Licensing
 
-This repository contains **no** game data, ROMs, ISOs, textures, audio, or other
-copyrighted assets from any Jak and Daxter title. You must extract game data yourself from
-your own legally purchased copy of the game. Nothing here is a substitute for buying the
-original games.
+- The overwhelming majority of this codebase originates from [open-goal/jak-project](https://github.com/open-goal/jak-project), licensed under the **ISC License** — see [LICENSE](LICENSE).
+- Full attribution for OpenGOAL, devkitPro/libnx, and other third-party libraries can be found in [CREDITS.md](CREDITS.md).
 
-Jak and Daxter and all related names, characters and trademarks are the property of
-Sony Interactive Entertainment and Naughty Dog. Nintendo Switch is a trademark of Nintendo.
-Used here only for identification purposes.
+### Support & Donations
 
-## Takedown requests
+- If you would like to support the ongoing development of this Nintendo Switch port, you can do so here: **https://www.paypal.com/paypalme/fildicio**
+- Please also consider supporting the upstream decompilation work directly through the [OpenGOAL Project](https://github.com/open-goal/jak-project).
 
-If you are a rights holder and believe anything in this repository infringes your rights,
-please open an issue or contact the repository owner and it will be addressed promptly.
+---
 
+## Pre-compiled Binaries & Re-upload Policy
 
+Pre-compiled Switch binaries (`.nro` files) and associated tools (`extractor.exe`, `goalc.exe`) published under [Releases](https://github.com/fildicio/jak-project-switch/releases) are maintained and published by **fildicio**.
 
-### How It Works
+- **Re-uploading or mirroring binaries:** Re-uploading, mirroring, or redistributing pre-compiled binaries (`.nro`, `extractor.exe`, `goalc.exe`) is **strictly prohibited without explicit attribution to fildicio** and a direct link to the [official repository](https://github.com/fildicio/jak-project-switch).
+- **Official Build Verification:** Official binary releases render a compiled-in **"made by fildicio"** credit splash during the boot sequence and output the same marker in `gk_boot_log.txt`. 
+- **Building from Source:** You are free to compile the project from source yourself under the terms of the open-source license.
 
-**Prerequisites**
+---
 
-\* Windows PC with [**MSYS2**](https://www.msys2.org/) installed.
+## Asset Distribution Notice
 
-\* Legitimate PS2 ISO files: jak1.iso, jak2.iso, and jak3.iso.
+This repository contains **NO copyrighted game assets**, ROMs, ISOs, textures, audio, or game data from any *Jak and Daxter* title. 
 
-\* Files from the latest release of jak-project-switch:
+Users must supply and extract their own game assets from legally purchased original PS2 retail discs. *Jak and Daxter* and all related trademarks are the property of Sony Interactive Entertainment and Naughty Dog. Nintendo Switch is a registered trademark of Nintendo Co., Ltd.
 
-\*[jak1.nro, jak2.nro, jak3.nro](https://github.com/fildicio/jak-project-switch/releases/tag/v.0.3.0)
+---
 
-\* [extractor-windows-x86\_64.zip](https://github.com/fildicio/jak-project-switch/releases/tag/v.0.3.0) (contains extractor.exe and goalc.exe)
+## Takedown Requests
 
-**Step 1: File Preparation**
+If you are a rights holder and believe that content in this repository infringes upon your copyright or trademark, please open an issue or contact the repository maintainer directly to resolve the matter promptly.
 
-\* Extract the jak-project-switch-main zip.
+---
 
-\* Extract extractor.exe and goalc.exe directly into the root of your jak-project-switch-main folder.
+## Setup & Asset Extraction Guide
 
-\* Place your ISO files (jak1.iso, jak2.iso, jak3.iso) into the same project root folder.
+### Prerequisites
 
-**Step 2: Extracting Assets from PS2 ISOs (Run for each game)**
+1. **Windows PC** with [MSYS2](https://www.msys2.org/) installed.
+2. **Legitimate PS2 ISO files:** `jak1.iso`, `jak2.iso`, and/or `jak3.iso`.
+3. **Release Files:** Download the latest assets from the [Releases Page](https://github.com/fildicio/jak-project-switch/releases):
+   - NRO Executables: `jak1.nro`, `jak2.nro`, `jak3.nro`
+   - Tooling Package: `extractor-windows-x86_64.zip` (contains `extractor.exe` and `goalc.exe`)
 
-Open PowerShell or CMD in your project directory and run extractor.exe for each ISO file to extract, decompile, and compile the assets for the ARM64 architecture:
+---
 
-\* For Jak 1:
+### Step 1: Directory Setup
 
-.\\extractor.exe "C:\\path\\to\\jak-project-switch\\jak1.iso" --extract --decompile --compile --game jak1 --instruction-set arm64 --proj-path "C:\\path\\to\\jak-project-switch"
+1. Download and extract the `jak-project-switch-main` repository source archive.
+2. Extract `extractor.exe` and `goalc.exe` directly into the root folder of `jak-project-switch-main`.
+3. Move your PS2 game ISO files (`jak1.iso`, `jak2.iso`, `jak3.iso`) into the root directory.
 
-\* For Jak 2:
+---
 
-.\\extractor.exe "C:\\path\\to\\jak-project-switch\\jak2.iso" --extract --decompile --compile --game jak2 --instruction-set arm64 --proj-path "C:\\path\\to\\jak-project-switch"
+### Step 2: Asset Extraction & ARM64 Compilation
 
-\* For Jak 3:
+Open **PowerShell** or **CMD** in your project root folder and run `extractor.exe` targeting ARM64 for each game you own:
 
-.\\extractor.exe "C:\\path\\to\\jak-project-switch\\jak3.iso" --extract --decompile --compile --game jak3 --instruction-set arm64 --proj-path "C:\\path\\to\\jak-project-switch"
+```powershell
+# For Jak 1
+.\extractor.exe ".\jak1.iso" --extract --decompile --compile --game jak1 --instruction-set arm64 --proj-path "."
 
-**Step 3: Packaging Jak 1 with MSYS2**
+# For Jak II
+.\extractor.exe ".\jak2.iso" --extract --decompile --compile --game jak2 --instruction-set arm64 --proj-path "."
 
-\* Open MSYS2 Terminal from your Windows Start Menu.
-
-\* Navigate to your project folder:
-
-cd /c/path/to/jak-project-switch
-
-\* Prepare the build directory and copy jak1.nro as gk.nro:
-
-mkdir -p build-switch/game
-
-cp jak1.nro build-switch/game/gk.nro
-
-\* Package the game for the Switch SD card:
-
-./scripts/package-switch.sh build-switch iso\_data/jak1 build-switch/sd-card
-
-\* Copy the generated files from build-switch/sd-card to your Switch SD card (into sdmc:/switch/jak1/).
-
-**Step 4: Packaging Jak II & Jak 3 (Important Fix)**
-
-If you check scripts/build-switch.sh, you will notice this line:
-
-SWITCH\_GAME="${SWITCH\_GAME:-jak1}"
-
-By default, the runtime bakes in jak1. To compile gk.nro properly for Jak II or Jak 3, pass the SWITCH\_GAME environment variable before building:
-
-\* For Jak II: Copy jak2.nro to build-switch/game/gk.nro, then run:
-
-SWITCH\_GAME=jak2 ./scripts/build-switch.sh
-
-./scripts/package-switch.sh build-switch iso\_data/jak2 build-switch/sd-card
-
-\* For Jak 3: Repeat the same steps using jak3.nro and setting SWITCH\_GAME=jak3:
-
-SWITCH\_GAME=jak3 ./scripts/build-switch.sh
-
-./scripts/package-switch.sh build-switch iso\_data/jak3 build-switch/sd-card
-
-**Step 5: Transfer to SD Card**
-
-Transfer the resulting folders from build-switch/sd-card to your Switch SD card under sdmc:/switch/. You can now launch them via Homebrew Launcher or create NSP Forwarders for your home menu!
-
-this guide was written by @fadelmbow
+# For Jak 3
+.\extractor.exe ".\jak3.iso" --extract --decompile --compile --game jak3 --instruction-set arm64 --proj-path "."
