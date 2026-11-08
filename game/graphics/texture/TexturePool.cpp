@@ -172,11 +172,22 @@ void TexturePool::move_existing_to_vram(GpuTexture* tex, u32 slot_addr) {
   }
 }
 
+u64 TexturePool::pool_id(GLuint gl_texture) {
+#if defined(__SWITCH__)
+  return dkgl::resolve_texture_id(gl_texture);
+#else
+  return gl_texture;
+#endif
+}
+
 void TexturePool::update_gl_texture(GpuTexture* gpu_texture,
                                     u32 new_w,
                                     u32 new_h,
                                     GLuint new_gl_texture) {
   ASSERT(gpu_texture->gpu_textures.size() == 1);
+#if defined(__SWITCH__)
+  new_gl_texture = (GLuint)pool_id(new_gl_texture);  // T105 seam, like give_texture
+#endif
   gpu_texture->gpu_textures[0].gl = new_gl_texture;
   gpu_texture->w = new_w;
   gpu_texture->h = new_h;

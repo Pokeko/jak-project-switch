@@ -1667,7 +1667,7 @@ void TextureAnimator::run_clut_blender_group(DmaTransfer& tf,
       if (blender.pool_gpu_tex) {
         // TODO: handle debug checkbox.
         texture_pool->move_existing_to_vram(blender.pool_gpu_tex, tbp);
-        ASSERT(texture_pool->lookup(tbp).value() == blender.texture());
+        ASSERT(texture_pool->lookup(tbp).value() == TexturePool::pool_id(blender.texture()));
       } else {
         TextureInput in;
         in.gpu_texture = blender.texture();
@@ -1707,7 +1707,7 @@ void TextureAnimator::handle_clouds_and_fog(const DmaTransfer& tf,
 
   if (gpu_tex) {
     texture_pool->move_existing_to_vram(gpu_tex, input.cloud_dest);
-    ASSERT((int)texture_pool->lookup(input.cloud_dest).value() == tex);
+    ASSERT(texture_pool->lookup(input.cloud_dest).value() == TexturePool::pool_id(tex));
   } else {
     TextureInput in;
     in.gpu_texture = tex;
@@ -1731,7 +1731,7 @@ void TextureAnimator::handle_slime(const DmaTransfer& tf, TexturePool* texture_p
     auto no_scroll_tex = m_slime_final_texture.texture();
     if (m_slime_pool_gpu_tex) {
       texture_pool->move_existing_to_vram(m_slime_pool_gpu_tex, input.dest);
-      ASSERT(texture_pool->lookup(input.dest).value() == no_scroll_tex);
+      ASSERT(texture_pool->lookup(input.dest).value() == TexturePool::pool_id(no_scroll_tex));
     } else {
       TextureInput in;
       in.gpu_texture = no_scroll_tex;
@@ -1749,7 +1749,7 @@ void TextureAnimator::handle_slime(const DmaTransfer& tf, TexturePool* texture_p
     auto tex = m_slime_final_scroll_texture.texture();
     if (m_slime_scroll_pool_gpu_tex) {
       texture_pool->move_existing_to_vram(m_slime_scroll_pool_gpu_tex, input.scroll_dest);
-      ASSERT(texture_pool->lookup(input.scroll_dest).value() == tex);
+      ASSERT(texture_pool->lookup(input.scroll_dest).value() == TexturePool::pool_id(tex));
     } else {
       TextureInput in;
       in.gpu_texture = tex;
@@ -2593,7 +2593,7 @@ void TextureAnimator::run_fixed_animation_array(int idx,
         }
 
         texture_pool->move_existing_to_vram(anim.pool_gpu_tex, tbp);
-        ASSERT(texture_pool->lookup(tbp).value() == anim.fbt->texture());
+        ASSERT(texture_pool->lookup(tbp).value() == TexturePool::pool_id(anim.fbt->texture()));
       } else {
         TextureInput in;
         in.gpu_texture = anim.fbt->texture();
