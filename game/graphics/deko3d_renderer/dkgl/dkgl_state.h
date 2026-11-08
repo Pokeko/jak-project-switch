@@ -291,6 +291,7 @@ void draw_arrays(u32 mode, int first, int count);
 void draw_elements(u32 mode, int count, u32 type, const void* indices);
 
 // ---- lifecycle ---------------------------------------------------------------
+void set_int_attrib_draws(bool on);  // GL_INT draws (TextureAnimator) on/off
 void set_emitter(Emitter* e);   // null = shadow-only (host tests)
 void frame_begin();             // reset per-frame bookkeeping, keep objects
 void frame_end();               // dkgl review: glBufferData is persistent until the next frame_begin

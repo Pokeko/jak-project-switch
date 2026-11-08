@@ -14,6 +14,9 @@
 
 #if defined(__SWITCH__)
 #include "game/switch/imgui_stub.h"
+namespace dkgl {
+void set_int_attrib_draws(bool on);  // dkgl_state.h
+}
 #else
 #include "third-party/imgui/imgui.h"
 #endif
@@ -1331,7 +1334,16 @@ void TextureAnimator::handle_texture_anim_data(DmaFollower& dma,
               auto anim =
                   anim_code_to_info(static_cast<PcTextureAnimCodesJak2>(vif0.immediate), *this);
               auto p = scoped_prof(anim.name.c_str());
+#if defined(__SWITCH__)
+              // jak2 (AI-assisted): under dkgl only the skull gem composites; the other
+              // animations (clouds, holo signs, ...) drew wrong and cost GPU time.
+              dkgl::set_int_attrib_draws(vif0.immediate ==
+                                         (u16)PcTextureAnimCodesJak2::SKULL_GEM);
+#endif
               run_fixed_animation_array(anim.anim_array_idx, tf, texture_pool);
+#if defined(__SWITCH__)
+              dkgl::set_int_attrib_draws(false);
+#endif
               break;
             }
             case PcTextureAnimCodesJak2::CLOUDS_AND_FOG:

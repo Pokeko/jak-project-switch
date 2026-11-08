@@ -46,6 +46,7 @@ u64 g_bad_prim_count = 0;
 u64 g_bad_stencil_count = 0;  // T113
 u64 g_no_texture_draws = 0;   // §7.2 phase 2: draws whose every sampler was unbound
 u64 g_bad_attrib_count = 0;
+bool g_int_attrib_draws = false;
 u64 g_vtx_stride_mismatch_count = 0;
 u64 g_missing_element_buffer_count = 0;
 u64 g_bad_ubo_count = 0;  // TODO #5: draw whose bound uniform range has no live data
@@ -310,6 +311,11 @@ void restore_bucket_end_state() {
     g_cache.depth = d;
   }
 }
+// jak2 (AI-assisted): GL_INT attribs = the TextureAnimator composite quad. Off by default
+// (the pre-8fe05566c behaviour): only allow-listed animations draw (skull gem).
+void set_int_attrib_draws(bool on) {
+  g_int_attrib_draws = on;
+}
 u64 inert_draw_count() {
   return g_inert_draw_count;
 }
@@ -540,6 +546,9 @@ void flush_pending(u32 mode, int first, int count, u32 idx_type, u64 idx_off, bo
     const auto& a = vao->attribs[i];
     if (!a.enabled) {
       continue;
+    }
+    if (a.type == gl::INT && !g_int_attrib_draws) {
+      return;  // TextureAnimator composite outside the allow-list (see set_int_attrib_draws)
     }
     DkVtxAttribSize sz;
     DkVtxAttribType ty;
