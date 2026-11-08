@@ -199,8 +199,9 @@ void walk_tex_bucket(const void* data, uint32_t slot, uint32_t next, UploadFn up
       break;  // the bucket's closing call to the default-regs chain
     }
     auto t = d.read_and_advance();
-    if (t.size_bytes == 16 && t.vifcode0().kind == VifCode::Kind::PC_PORT &&
-        t.vifcode0().immediate == 12 && s_anim) {
+    // pc-texture-anim-flag start-anim-array is a qwc-0 cnt (size_bytes 0): match on the
+    // vifcode only, like GL TextureUploadHandler::render.
+    if (t.vifcode0().kind == VifCode::Kind::PC_PORT && t.vifcode0().immediate == 12 && s_anim) {
       s_stats.uploads++;
       s_anim(d, data);  // walks until its FINISH_ARRAY packet
       continue;

@@ -952,6 +952,17 @@ std::unique_ptr<FullScreenDraw> s_blackout;  // pmode_alp fade (OpenGLRenderer m
 std::unique_ptr<TextureAnimator> s_tex_anim;
 bool s_tex_anim_frame = false;   // a dispatch opened the list in this capture
 u64 s_tex_anim_dispatches = 0;   // log only
+GLuint s_tex_anim_dummy = 0;     // the animator's "no output" id (all slots at construction)
+// GL hands Merc2/TFragment the animator's public slots; here they also hold the static
+// clut defaults, so copy every real animator output over them after each dispatch.
+void merge_tex_anim_slots() {
+  const auto& pub = *s_tex_anim->slots();
+  for (size_t i = 0; i < pub.size() && i < s_jak2_anim_slots.size(); i++) {
+    if (pub[i] != s_tex_anim_dummy) {
+      s_jak2_anim_slots[i] = pub[i];
+    }
+  }
+}
 // T126 (AI-assisted): the UNCHANGED GL GlowRenderer. Its probe depth texture is the frame
 // depth image itself (dktexgpu alias, see dkgl_state.h set_frame_depth_tex).
 std::unique_ptr<GlowRenderer> s_glow;
@@ -1393,6 +1404,7 @@ bool init_jak2(TexturePool* pool, Loader* loader, int loaded) {
   if (!flag("gk_dkgl_notexanim.txt")) {
     s_tex_anim = std::make_unique<TextureAnimator>(s_srs->shaders, s_common_level,
                                                    g_game_version);
+    s_tex_anim_dummy = s_tex_anim->slots()->empty() ? 0 : s_tex_anim->slots()->front();
   }
   // T126 (AI-assisted): the UNCHANGED GL GlowRenderer (its constructor's FBO/texture/
   // renderbuffer calls go through the dkgl overrides too). A/B flag: gk_dkgl_noglow.txt.
@@ -1813,6 +1825,7 @@ void tex_anim_end() {
   close_segment();
   s_lists[idx].valid = true;
   s_tex_anim_dispatches++;
+  merge_tex_anim_slots();
   s_cur_bucket = -1;
 }
 bool record_side_list(int list) {
