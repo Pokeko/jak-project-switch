@@ -144,7 +144,9 @@ constexpr uint32_t kSamplersBytes = kSamplerCount * DK_SAMPLER_DESCRIPTOR_ALIGNM
 // bit3 repeat (dkgl_state.h texture_sampler_combo). 16 * 0x20 = 0x200 more, absorbed
 // by the same rounding slack (region end 0x2B4300 + 0x200 = 0x2B4500 < 0x2B5000), so
 // the memblock size is still 0x2B5000 -- no allocation-size change, no renumbering.
-constexpr uint32_t kDkglSamplerCount = 16;
+// jak2 sky (AI-assisted): 16 -> 32, bit4 = wrap_t repeat (bit3 is now wrap_s only).
+// 0x2B4300 + 0x400 = 0x2B4700, still inside the 0x2B5000 rounding.
+constexpr uint32_t kDkglSamplerCount = 32;
 constexpr uint32_t kOffDkglSamplers = kOffSamplers + kSamplersBytes;  // 0x2B4300
 constexpr uint32_t kDkglSamplersBytes = kDkglSamplerCount * DK_SAMPLER_DESCRIPTOR_ALIGNMENT;
 constexpr uint32_t kDataPool = kOffDkglSamplers + kDkglSamplersBytes;  // 0x2B4500
@@ -1071,10 +1073,9 @@ bool upload_splash(const unsigned char* rgba, int width, int height) {
       // dkgl review (AI-assisted): no mip bit = GL_LINEAR/GL_NEAREST minification, which
       // samples level 0 only; DkMipFilter_Nearest would still pick a mip by LOD.
       smp.mipFilter = (combo & 4) ? DkMipFilter_Linear : DkMipFilter_None;
-      const DkWrapMode wrap = (combo & 8) ? DkWrapMode_Repeat : DkWrapMode_ClampToEdge;
-      smp.wrapMode[0] = wrap;
-      smp.wrapMode[1] = wrap;
-      smp.wrapMode[2] = wrap;
+      smp.wrapMode[0] = (combo & 8) ? DkWrapMode_Repeat : DkWrapMode_ClampToEdge;
+      smp.wrapMode[1] = (combo & 16) ? DkWrapMode_Repeat : DkWrapMode_ClampToEdge;
+      smp.wrapMode[2] = DkWrapMode_ClampToEdge;
       DkSamplerDescriptor sdesc;
       dkSamplerDescriptorInitialize(&sdesc, &smp);
       memcpy(sbase + kOffDkglSamplers + combo * DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &sdesc,

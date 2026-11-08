@@ -632,11 +632,12 @@ void pending_target_consumed() {
 u32 texture_sampler_combo(u32 gl_id) {
   TexObj* t = tex_by_gl(gl_id);
   PoolTexParams pool;
-  u32 min_filter, mag_filter, wrap_s;
+  u32 min_filter, mag_filter, wrap_s, wrap_t;
   if (t) {
     min_filter = t->min_filter;
     mag_filter = t->mag_filter;
     wrap_s = t->wrap_s;
+    wrap_t = t->wrap_t;
   } else {
     // pool textures: what glTexParameteri set on them, else the TexturePool upload
     // defaults (LINEAR/LINEAR + CLAMP)
@@ -647,6 +648,7 @@ u32 texture_sampler_combo(u32 gl_id) {
     min_filter = pool.min_filter;
     mag_filter = pool.mag_filter;
     wrap_s = pool.wrap_s;
+    wrap_t = pool.wrap_t;
   }
   u32 combo = 0;
   switch (min_filter) {
@@ -668,8 +670,13 @@ u32 texture_sampler_combo(u32 gl_id) {
       (min_filter == gl::LINEAR_MIPMAP_LINEAR || min_filter == gl::NEAREST_MIPMAP_LINEAR)) {
     combo |= 4;  // mip_linear
   }
+  // S and T wrap separately: the GS CLAMP register (DirectRenderer, the jak2 sky) can
+  // repeat one axis and clamp the other.
   if (wrap_s == gl::REPEAT) {
     combo |= 8;
+  }
+  if (wrap_t == gl::REPEAT) {
+    combo |= 16;
   }
   return combo;
 }
