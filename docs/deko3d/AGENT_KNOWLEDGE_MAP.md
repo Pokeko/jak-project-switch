@@ -250,6 +250,15 @@ docker run --rm -v "$PWD:/work" -w /work devkitpro/devkita64:latest \
 - FIX 77: 60 fps needs GOAL (`wait_dma`) ≤ 16.6 ms too; renderer speed alone is not enough.
 - FIX 95: city slowdown fixed via loader stream budget, without touching CPU/GPU clocks.
 - Plan §0: the old "render 30.7 ms" was mostly vsync wait; real GL work ≈ 11.6 ms p50 (jak1).
+- **jak2 texanim disaster (2026-11-08, `8fe05566c` → `77f876649`, AI-assisted). NEVER AGAIN.**
+  Adding GL_INT to dkgl `attrib_map` to fix ONE effect (skull gem) silently un-skipped
+  EVERY TextureAnimator composite (clouds, holo signs, ...): sky streaks, wrong colours,
+  green squares, ~2.5 ms GPU lost, and 3 hardware trips of follow-up guessing.
+  Rules: (1) a dkgl format/state fix is GLOBAL — before shipping, grep every caller that
+  hits the path and list what newly starts drawing; (2) enable new draws behind an
+  allow-list (`dkgl::set_int_attrib_draws`) one effect at a time, never all at once;
+  (3) when hardware shows a regression, first go back to the last good NRO (`.bak`),
+  then fix — no stacked guess-fixes on a broken build.
 
 ## 16. Porting recipe (one renderer = one session)
 
