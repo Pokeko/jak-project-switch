@@ -213,7 +213,8 @@ bool attrib_map(int size, u32 type, bool normalized, bool integer, DkVtxAttribSi
   // CommonOceanRenderer's fog is an IPointer of 4 u8 (all its draws were skipped before).
   const DkVtxAttribType int_ty =
       integer ? DkVtxAttribType_Uint : (normalized ? DkVtxAttribType_Unorm : DkVtxAttribType_Uscaled);
-  if (type == gl::UNSIGNED_INT) {
+  if (type == gl::UNSIGNED_INT || type == gl::INT) {
+    // GL_INT: TextureAnimator's vertex_index (glVertexAttribIPointer, 1 x GL_INT)
     switch (size) {
       case 1:
         *sz = DkVtxAttribSize_1x32;
@@ -230,7 +231,12 @@ bool attrib_map(int size, u32 type, bool normalized, bool integer, DkVtxAttribSi
       default:
         return false;
     }
-    *ty = integer ? DkVtxAttribType_Uint : DkVtxAttribType_Uscaled;
+    if (type == gl::INT) {
+      *ty = integer ? DkVtxAttribType_Sint
+                    : (normalized ? DkVtxAttribType_Snorm : DkVtxAttribType_Sscaled);
+    } else {
+      *ty = integer ? DkVtxAttribType_Uint : DkVtxAttribType_Uscaled;
+    }
     return true;
   }
   if (type == gl::UNSIGNED_BYTE) {
